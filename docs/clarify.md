@@ -14,6 +14,9 @@ Nguồn trả lời ưu tiên: **Anh Năm hàng xóm** (trợ giảng AI ở tab
 | Q8 | | `invuln_ticks` (starter có, PRD mục D không có) — bỏ khỏi scenario/snapshot? | Giả định: bỏ khỏi scenario; snapshot có thể giữ để không vỡ client | Integrator |
 | Q9 | | Scenario đặt sẵn `oxygen_ticks = 0`, `zero_oxy_ticks = 0`: ngạt đầu ở tick 59 hay 60? | Giả định: **60** — bước đầu tiên có oxy 0 là t = 1 nên ngạt ở t+59; ca ngập từ oxy đầy vẫn là 1859 | QA |
 | Q10 | | `regrow_ticks = 1200` đặt ở tick hái (event tick) — nút mọc lại ở `tick_hái + 1200`? | Giả định: đúng, test tính theo `event.gather.tick + 1200` | QA |
+| Q11 | 2026-11-21 | `bench_cmd` khi môi trường không có Google Chrome / Chromium? | Thoát mã 2 và in thông báo rõ ràng theo spec Phase 4 | Integrator |
+| Q12 | 2026-11-21 | `soak_cmd` bỏ trường `duration_s` khi kiểm tra tính tất định cùng seed? | Đúng, vì thời gian chạy phụ thuộc vào tải CPU phần cứng của máy chấm | QA |
+| Q13 | 2026-11-21 | Trạng thái Chế độ tương phản cao có cần lưu bền vững qua các phiên chơi? | Đúng, ghi nhớ trong `sessionStorage` của trình duyệt | UX/UI |
 
 ## Bàn giao PO — Nhật Minh, Phase 1 (2026-11-21)
 

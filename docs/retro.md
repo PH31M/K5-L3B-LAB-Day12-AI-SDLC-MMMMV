@@ -26,3 +26,5 @@
   - *Cách phát hiện:* Vinh chạy thử trực tiếp trên trình duyệt, phát hiện ngay `alert()` làm dừng vòng lặp `requestAnimationFrame` của Canvas khiến game bị đơ cứng, đồng thời việc nạp tệp âm thanh ngoài vi phạm quy định hạn chế asset nặng. Vinh đã yêu cầu AI đổi sang in-canvas toast banner và tổng hợp âm thanh bằng Web Audio API thuần mã code.
 - **Nếu làm lại, đổi gì:**
   - Sẽ thiết lập sẵn ma trận truy vết và test contract tự động ngay từ phút thứ 0 để giảm bớt thời gian chờ đợi giữa các nhịp chuyển giao schema.
+- **1 hành động cải tiến tiếp theo (sau khi phát hành v1.0.0):**
+  - Mở rộng thêm phụ đề âm thanh (Sound Subtitles) và bảng xếp hạng cộng đồng trực tuyến để tăng khả năng tiếp cận và giữ chân người chơi lâu dài.
