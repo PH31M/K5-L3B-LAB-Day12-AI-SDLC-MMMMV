@@ -1,15 +1,14 @@
 # qvinhh2312 — phản tư cá nhân (≤ 200 từ)
 
 - Tôi đã làm (kèm link commit):
-  - Phụ trách module `client/ui` và vai trò UX + Demo lead.
-  - Cài đặt toàn bộ hệ thống HUD cả 2 buổi (sáng: lặn/hái/bắt cá; tối: kho/bếp/bàn/khách) trong `chonoi/web/index.html` (Ticket 06).
-  - Tích hợp banner nhắc phím ngữ cảnh tương tác thông minh (Contextual Prompts) khi vào tầm bến tàu [E], nút rau [E], đàn cá [Space], bếp và bàn ăn [E].
-  - Thiết kế màn hình kết thúc (Game Over overlay) hiển thị rõ lý do (`docked`/`time`/`fainted`), bảng điểm chi tiết và nút Chơi lại hỗ trợ cả click chuột lẫn phím R.
-  - Sáng tạo hệ thống âm thanh tự sinh bằng Web Audio API (0 KB asset ngoài) và hệ thống hạt bọt khí / khói bếp / sóng nước.
-  - Soạn thảo kịch bản demo 3 phút trong `docs/demo.md` và bằng chứng nghiệm thu trong `docs/proof/phase-1/hud-ui.md`.
+  - Phụ trách module `client/ui` (UX + Demo lead).
+  - Hoàn thành HUD 2 buổi sáng/tối (Ticket 06) và nâng cấp hiển thị độ tươi / hàng ươn theo contract v1.2 (Ticket 05 Phase 3).
+  - Tích hợp banner nhắc phím ngữ cảnh (Bến, Nút, Cá, Bếp, Bàn) và toast cảnh báo cá thể ươn `spoiled`.
+  - Sáng tạo hệ thống âm thanh tự sinh Web Audio API (0 KB asset ngoài) và hiệu ứng VFX hạt bọt khí / khói bếp / cờ `?fx=0`.
+  - Biên soạn kịch bản demo 3 phút (`docs/demo.md`) và đầy đủ tài liệu kiểm chứng (`docs/proof/`).
 - Tôi đã review (kèm link):
-  - Chuẩn bị review chéo cho PR của Nguyễn Văn Minh (`@vm140205-collab`) theo quy ước luồng review vòng tròn của nhóm.
+  - Chuẩn bị review cho PR của Nguyễn Văn Minh (`feat/van-minh`) theo quy ước luồng nhóm.
 - AI sai ở đâu và tôi phát hiện thế nào:
-  - Ban đầu AI đề xuất dùng hàm `alert()` và prompt dạng DOM popup tách rời gây khựng vòng lặp `requestAnimationFrame` của canvas; tôi đã kịp thời phát hiện và chuyển sang render trực tiếp in-canvas banner với độ trong suốt và bo góc hiện đại.
+  - Ban đầu AI đề xuất dùng `alert()` và nạp file MP3 ngoài làm đứng loop canvas và tăng kích thước repo; tôi đã kịp thời chuyển sang canvas overlay và bộ tạo dao động âm thanh Web Audio hoàn toàn bằng mã.
 - Điều tôi học được:
-  - Thiết kế UI/UX game 2D nhẹ, `null-safe` khi client độc lập với tiến độ viết simulation core, và tuân thủ chặt chẽ ranh giới module để không làm sai lệch headless contract.
+  - Nắm vững kiến trúc client null-safe tương thích cả 2 chuẩn schema kho (đếm v1.0 và cá thể v1.2), tối ưu hiệu năng đồ họa và giữ vững tính tất định của headless contract.
