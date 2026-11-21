@@ -4,11 +4,11 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done (ready-for-review)
 
-- [ ] Buổi sáng hiện: thời gian còn lại, thanh oxy (đổi màu khi gần cạn), Máu, số món/`hold_capacity`, danh sách món trong giỏ, nhắc phím khi vào tầm nút/đàn cá/bến.
-- [ ] Buổi tối hiện: `stock`, khách đang ngồi kèm món gọi + thanh kiên nhẫn, trạng thái bếp + thời gian nấu, món trên tay, tiền, uy tín, thời gian còn lại.
-- [ ] Thiếu trường nào thì bỏ qua trường đó, không văng lỗi (client chạy được khi luật chưa xong).
-- [ ] Không che vùng chơi: chữ/thanh HUD nằm ngoài vùng tương tác quanh nhân vật, alpha lớp trang trí thấp khi đi qua vùng đó.
-- [ ] Màn kết thúc hiện lý do (`time`/`docked`/`fainted`) và điểm; nút chơi lại hoạt động.
-- [ ] Không thêm mã nào vào `chonoi/` hay đổi snapshot; headless vẫn cho JSONL giống từng byte.
+- [x] Buổi sáng hiện: thời gian còn lại (đổi màu < 30s), thanh oxy (đổi màu khi gần cạn < 25%), Máu (tim đỏ/rỗng), số món/`hold_capacity`, danh sách món trong giỏ kèm số lượng, nhắc phím ngữ cảnh khi vào tầm nút (hái rau)/đàn cá (bắt cá)/bến tàu (cập bến).
+- [x] Buổi tối hiện: `stock` (kho dự trữ nguyên liệu trực quan), khách đang ngồi kèm món gọi + thanh kiên nhẫn (xanh/vàng/đỏ), trạng thái bếp + thời gian nấu đếm ngược, món trên tay, tiền, uy tín, thời gian còn lại, nhắc phím ngữ cảnh (bếp / bàn).
+- [x] Thiếu trường nào thì bỏ qua trường đó, không văng lỗi (client chạy được khi luật chưa xong, `null-safe`).
+- [x] Không che vùng chơi: chữ/thanh HUD nằm ngoài vùng tương tác quanh nhân vật, bo góc thanh lịch, alpha lớp trang trí thấp khi đi qua vùng đó.
+- [x] Màn kết thúc hiện lý do (`time`/`docked`/`fainted`) và bảng điểm chi tiết (tiền, uy tín, điểm số, sản lượng); nút chơi lại hoạt động cả click chuột lẫn phím R.
+- [x] Không thêm mã nào vào `chonoi/` hay đổi snapshot; headless vẫn cho JSONL giống từng byte.
