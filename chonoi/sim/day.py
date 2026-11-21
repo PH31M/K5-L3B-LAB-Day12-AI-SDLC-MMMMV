@@ -102,15 +102,18 @@ class DaySim:
         if self.days_completed and "player" in scenario:
             for key in ("oxygen_ticks", "hp", "zero_oxy_ticks"):
                 scenario["player"].pop(key, None)
+        # v1.2: Ngày đầu giữ id trong mẫu gather.hold; các Ngày kế cấp id mới theo thứ tự mảng
         self.inner = GatherSim(tuning, scenario, self.streams, self.ids, day=self.day,
-                               active_upgrades=self.active_upgrades)
+                               active_upgrades=self.active_upgrades,
+                               renew_hold_ids=self.days_completed > 0)
         self.inner.reputation = self.reputation
 
     def _start_quan(self):
-        inventory = self.inner.inventory_items()
+        # Bàn giao cùng tick chuyển pha: không hao thêm; ca quán chạy từ bước sau. Giữ units chính xác.
+        inventory = self.inner.handoff_items()
         menu = {dish: self.tuning["menu"][dish] for dish in self.plan["dishes"]}
         scenario = deepcopy(self.scenario.get("quan", {}))
-        validate_day_quan(scenario, dict(self.tuning, menu=menu), inventory)
+        validate_day_quan(scenario, dict(self.tuning, menu=menu), self.inner.inventory_items())
         self.inner = QuanSim(self.tuning, scenario, self.streams, self.ids,
                              inventory=inventory, day_plan=self.plan)
         self.inner.money = self.money

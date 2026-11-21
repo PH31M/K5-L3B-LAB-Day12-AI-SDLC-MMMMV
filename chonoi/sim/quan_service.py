@@ -10,6 +10,7 @@ import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..ids import id_key, sort_by_id
+from . import quan_stock
 
 TICK = 60.0
 
@@ -142,19 +143,22 @@ def handle_interact(sim: Any, inp: Optional[Any] = None) -> List[Tuple[str, dict
             cook_s = menu_item.get("cook_s", 0)
             base_price = menu_item.get("price", 0)
 
-            # Trừ đúng nguyên liệu từ kho stock
-            # Tạo danh sách items sắp xếp alphabet
-            items: List[str] = []
-            for kind, count in recipe.items():
-                items.extend([kind] * count)
-                sim.stock[kind] = sim.stock.get(kind, 0) - count
-                if sim.stock[kind] <= 0:
-                    sim.stock.pop(kind, None)
-            items.sort()
+            if quan_stock.is_v12(sim):
+                # v1.2: tiêu đúng các id đang giữ, chốt giá theo trung bình độ tươi
+                items, base_price = quan_stock.consume(sim, customer)
+            else:
+                # Trừ đúng nguyên liệu từ kho stock; items là mảng kind sắp alphabet
+                items = []
+                for kind, count in recipe.items():
+                    items.extend([kind] * count)
+                    sim.stock[kind] = sim.stock.get(kind, 0) - count
+                    if sim.stock[kind] <= 0:
+                        sim.stock.pop(kind, None)
+                items.sort()
 
             # Cập nhật trạng thái đơn khách
             customer["order_status"] = "assigned"
-            customer["reserved"] = {}
+            customer["reserved"] = [] if quan_stock.is_v12(sim) else {}
 
             # Cập nhật bếp sang cooking
             order_id = get_order_id(customer)

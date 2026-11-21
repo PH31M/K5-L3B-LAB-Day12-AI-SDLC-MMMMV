@@ -1,0 +1,13 @@
+
+CỔNG KIỂM PHASE 1
+============================================================
+[PASS] unittest (unit + hộp đen)
+        Ran 211 tests in 78.476s |  | OK
+[PASS] smoke gather -> kho -> quan
+        kho ghi [{'id': 'I1', 'kind': 'ca_loc', 'fresh': 99.99166666666666}, {'id': 'I2', 'kind': 'bong_sung', 'fresh': 99.99166666666666}, {'id': 'I3', 'kind': 'bong_sung', 'fresh': 99.99166666666666}] -> quán đọc [{'id': 'I1', 'kind': 'ca_loc', 'fresh': 99.992}, {'id': 'I2', 'kind': 'bong_sung', 'fresh': 99.992}, {'id': 'I3', 'kind': 'bong_sung', 'fresh': 99.992}]
+[PASS] tất định cùng seed
+        53438 byte, giống nhau: True
+[PASS] bằng chứng dẫn đúng
+        OK: 28 đường dẫn bằng chứng được dẫn, không có claim nào thiếu file
+============================================================
+KẾT LUẬN: PASS

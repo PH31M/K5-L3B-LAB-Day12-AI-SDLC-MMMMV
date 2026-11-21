@@ -8,11 +8,11 @@ phải có đúng một món, khách eating thiếu giá/tip...) — xem PRD-0 m
 import json
 
 from .errors import BadInput
-from .inventory import KINDS_P1, validate_items
+from .inventory import KINDS_P1, individual_schema, validate_individuals, validate_items
 from .sim.shop import gather_tuning
 
 GATHER_KEYS = {"player", "hold", "nodes", "fish", "random_fish", "time_left_ticks",
-               "monsters", "ca_ho"}
+               "monsters", "ca_ho", "random_current", "current_direction"}
 GATHER_PLAYER_KEYS = {"pos", "vel", "heading_deg", "hp", "oxygen_ticks", "zero_oxy_ticks",
                       "invuln_ticks", "catch_cd_ticks", "attack_cd_ticks"}
 NODE_KINDS = ("bong_dien_dien", "bong_sung", "keo_neo")
@@ -61,7 +61,9 @@ def load_scenario(path, mode: str, tuning: dict) -> dict:
     if mode == "gather":
         _validate_gather(block, tuning)
     else:
-        _validate_quan(block, tuning)
+        _validate_quan(block, tuning, defer_stock=individual_schema(tuning))
+        if individual_schema(tuning) and "stock" in block:
+            _check_reserved_v12(block, tuning)
     return block
 
 
@@ -169,6 +171,22 @@ def _day_plan_overrides(plans, tuning):
 def validate_day_quan(scenario, tuning, stock):
     """Kiểm các liên kết và phần giữ với menu và kho đã bàn giao."""
     _validate_quan(dict(scenario, stock=stock), tuning, check_reserved_defaults=True)
+    if individual_schema(tuning):
+        _check_reserved_v12(dict(scenario, stock=stock), tuning)
+
+
+def validate_quan_stock(scenario, tuning, stock):
+    """Quán độc lập nạp kho từ --inventory: kiểm phần giữ của khách dựng sẵn với kho đó."""
+    _check_reserved_v12(dict(scenario, stock=stock), tuning)
+
+
+def _check_reserved_v12(b, tuning):
+    """v1.2: `reserved` là mảng id trỏ tới cá thể chưa ươn, đủ công thức, không dùng chung; đơn bỏ trống
+    được cấp theo order_tick rồi id bàn. Chạy đúng thuật toán của sim để mâu thuẫn -> mã 2 trước khi ghi."""
+    from copy import deepcopy
+    from .sim import freshness, quan_stock
+    stock = freshness.from_fixture(b.get("stock", []))
+    quan_stock.assign_fixture(deepcopy(b.get("customers", [])), stock, tuning["menu"], tuning["freshness"])
 
 
 def _num(v):
@@ -199,10 +217,16 @@ def _validate_gather(b, tuning):
         raise BadInput("random_fish phải là boolean")
     if "hold" in b:
         h = b["hold"]
-        if not isinstance(h, list) or any(k not in KINDS_P1 for k in h):
+        if individual_schema(tuning):
+            validate_individuals(h, name="hold")  # v1.2: mảng cá thể {id, kind, fresh}
+        elif not isinstance(h, list) or any(not isinstance(k, str) or k not in KINDS_P1 for k in h):
             raise BadInput("hold phải là mảng id nguyên liệu hợp lệ")
         if len(h) > g["hold_capacity"]:
             raise BadInput("hold vượt sức chứa")
+    if "random_current" in b and not isinstance(b["random_current"], bool):
+        raise BadInput("random_current phải là boolean")
+    if "current_direction" in b and (type(b["current_direction"]) is not int or b["current_direction"] not in (-1, 1)):
+        raise BadInput("current_direction phải là -1 hoặc 1")
     p = b.get("player", {})
     if not isinstance(p, dict):
         raise BadInput("player phải là object")
@@ -291,8 +315,12 @@ def _validate_quan(b, tuning, *, defer_stock=False, check_reserved_defaults=Fals
     for arr in ("stoves", "tables", "customers"):
         if arr in b:
             _check_ids(arr, b[arr])
+    v12 = individual_schema(tuning)
     if "stock" in b:
-        validate_items(b["stock"])
+        if v12:
+            validate_individuals(b["stock"], name="stock")
+        else:
+            validate_items(b["stock"])
     p = b.get("player", {})
     if not isinstance(p, dict) or set(p) - QUAN_PLAYER_KEYS:
         raise BadInput("quan.player chỉ có pos và vel")
@@ -367,9 +395,14 @@ def _validate_quan(b, tuning, *, defer_stock=False, check_reserved_defaults=Fals
             if key in c:
                 _nonneg_int(f"customers.{cid}.{key}", c[key])
         reserved = c.get("reserved") or {}
-        if check_reserved_defaults and status == "reserved" and not reserved:
+        if v12:
+            # v1.2: phần giữ là mảng id; kiểm sâu ở _check_reserved_v12 (cần kho cá thể)
+            if not isinstance(c.get("reserved", []), list):
+                raise BadInput(f"customers.{cid}: reserved phải là mảng id cá thể (v1.2)")
+            reserved = list(c.get("reserved") or [])
+        elif check_reserved_defaults and status == "reserved" and not reserved:
             reserved = menu[dish]["recipe"]
-        if reserved:
+        if reserved and not v12:
             reserved = validate_items(reserved)
             if reserved != menu[dish]["recipe"]:
                 raise BadInput(f"customers.{cid}: reserved khác công thức của món")

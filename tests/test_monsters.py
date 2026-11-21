@@ -3,7 +3,8 @@
 import json
 import unittest
 
-from helpers import Workdir, events, frames, read_jsonl, run_headless, snapshots, write_json
+from helpers import (Workdir, counts, events, frames, individuals, kinds, read_jsonl, run_headless,
+                     snapshots, write_json)
 
 
 class Base(unittest.TestCase):
@@ -61,7 +62,7 @@ class Chase(Base):
 class Hit(Base):
     def test_hit_mat_mau_roi_nua_gio_va_bat_tu(self):
         """Đứng cùng chỗ với M1: mất 1 Máu, rơi floor(3/2)=1 món cuối, bất tử 90 tick."""
-        sc = {"gather": {"player": {"pos": [60, 24]}, "hold": ["ca_loc", "bong_sung", "ca_linh"]}}
+        sc = {"gather": {"player": {"pos": [60, 24]}, "hold": individuals(["ca_loc", "bong_sung", "ca_linh"])}}
         with Workdir() as w:
             rows = self.run_gather(w, sc, ticks=3, every="1")
             hit = events(rows, "monster_hit")
@@ -69,11 +70,12 @@ class Hit(Base):
             data = hit[0]["data"]
             self.assertEqual(data["monster_id"], "M1")
             self.assertEqual(data["hp"], 2)
-            self.assertEqual(data["lost"], ["ca_linh"])          # LIFO: món nhặt sau cùng
+            self.assertEqual(kinds(data["lost"]), ["ca_linh"])   # LIFO: món nhặt sau cùng
+            self.assertEqual(data["lost"][0]["id"], "I3")          # v1.2: lost là mảng cá thể
             snap = self.snaps(rows)[3]
             self.assertEqual(snap["player"]["hp"], 2)
             self.assertEqual(snap["player"]["invuln_ticks"], 88)  # 90 - 2 bước
-            self.assertEqual(snap["hold"], ["ca_loc", "bong_sung"])
+            self.assertEqual(kinds(snap["hold"]), ["ca_loc", "bong_sung"])
 
     def test_bat_tu_khong_bi_hit_lan_hai(self):
         """Sau hit đầu, đứng yên trong 90 tick: chỉ có một monster_hit."""
@@ -101,7 +103,7 @@ class Hit(Base):
 class Faint(Base):
     def test_ngat_do_quai_kho_rong_va_gather_end(self):
         sc = {"gather": {"player": {"pos": [60, 24], "hp": 1},
-                         "hold": ["ca_loc", "bong_sung"]}}
+                         "hold": individuals(["ca_loc", "bong_sung"])}}
         with Workdir() as w:
             inv = w.path("inv.json")
             args = ["--mode", "gather", "--seed", "1", "--ticks", "30", "--scenario",
@@ -116,10 +118,10 @@ class Faint(Base):
             self.assertEqual(faint[0]["data"]["hp"], 0)
             end = events(rows, "gather_end")[0]
             self.assertEqual(end["data"]["reason"], "fainted")
-            self.assertEqual(end["data"]["inventory"]["items"], {})
+            self.assertEqual(end["data"]["inventory"]["items"], [])
             self.assertEqual(snapshots(rows)[-1]["hold"], [])
             with open(inv, encoding="utf-8") as f:
-                self.assertEqual(json.load(f), {"items": {}})
+                self.assertEqual(json.load(f), {"items": []})
 
 
 class ScenarioOverride(Base):

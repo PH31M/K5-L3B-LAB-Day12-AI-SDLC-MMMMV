@@ -3,7 +3,8 @@
 import json
 import unittest
 
-from helpers import Workdir, events, frames, read_jsonl, run_headless, snapshots, write_json
+from helpers import (Workdir, counts, events, frames, individuals, kinds, read_jsonl, run_headless,
+                     snapshots, write_json)
 
 
 class GatherCore(unittest.TestCase):
@@ -24,6 +25,7 @@ class GatherCore(unittest.TestCase):
             rows = self.run_gather(w, {
                 "player": {"pos": [20, 0.5], "oxygen_ticks": 1790},
                 "random_fish": False,
+                "random_current": False,  # v1.2: extension current bật trong manifest; ca này chỉ xét oxy
             }, 1800)
             players = [row["player"] for row in snapshots(rows)]
             self.assertEqual([p["oxygen_ticks"] for p in players[:3]], [1790, 1796, 1800])
@@ -47,15 +49,17 @@ class GatherCore(unittest.TestCase):
         with Workdir() as w:
             rows = self.run_gather(w, {
                 "player": {"pos": [20, 4], "oxygen_ticks": 1},
-                "hold": ["ca_loc", "bong_sung", "ca_linh"],
+                "hold": individuals(["ca_loc", "bong_sung", "ca_linh"]),
             }, 240)
+            faint = events(rows, "faint")[0]["data"]
+            self.assertEqual(kinds(faint.pop("lost")), ["ca_linh", "bong_sung", "ca_loc"])  # v1.2: mảng cá thể LIFO
             self.assertEqual([(e["tick"], e["name"], e["data"]) for e in events(rows)], [
                 (1, "oxygen_empty", {"oxygen_ticks": 0}),
                 (60, "choke", {"hp": 2}),
                 (120, "choke", {"hp": 1}),
                 (180, "choke", {"hp": 0}),
-                (180, "faint", {"cause": "choke", "lost": ["ca_linh", "bong_sung", "ca_loc"], "hp": 0}),
-                (180, "gather_end", {"reason": "fainted", "inventory": {"items": {}}}),
+                (180, "faint", {"cause": "choke", "hp": 0}),
+                (180, "gather_end", {"reason": "fainted", "inventory": {"items": []}}),
             ])
             final = snapshots(rows)[-1]
             self.assertEqual(final["hold"], [])
@@ -64,7 +68,7 @@ class GatherCore(unittest.TestCase):
             self.assertEqual(rows[-1]["reason"], "fainted")
             self.assertEqual(rows[-1]["ticks"], 180)
             with open(w.path("catch.json"), encoding="utf-8") as inventory_file:
-                self.assertEqual(json.load(inventory_file), {"items": {}})
+                self.assertEqual(json.load(inventory_file), {"items": []})
 
     def test_surfacing_on_choke_tick_restores_oxygen(self):
         with Workdir() as w:

@@ -14,6 +14,9 @@ Spec: `docs/specs/phase-3.md` · Quyết định: `docs/adr/0001-kho-ca-the-va-d
 | 07 | Mở rộng: dòng nước lũ (`current`) | 02 | Nhật Minh | ≥1 mục cho nhóm 5 |
 | 08 | Mở rộng: khách đặt trước (`reservations`) | 03 | Đức Minh | Mục thứ 2 nếu đủ thời gian |
 
+**Trạng thái (2026-11-21, tích hợp):** 01–07 xong trên nhánh tích hợp — ma trận `docs/verification/phase-3.md`,
+bằng chứng `docs/proof/phase-3/do-tuoi/`. 08 (`reservations`) **chưa làm** (không bắt buộc với nhóm 5 khi đã có `current`).
+
 **Nhịp tích hợp:** 01 trước (kèm test migration đỏ → xanh), rồi 02/03/05 song song, 06 chạy liên tục,
 04 khi P2 có `day`, cuối cùng 07/08. Bật v1.2 chỉ khi 02 và 03 cùng xong.
 

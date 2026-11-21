@@ -11,7 +11,8 @@ from pathlib import Path
 import shutil
 import unittest
 
-from helpers import ROOT, Workdir, events, frames, read_jsonl, run_headless, snapshots, write_json
+from helpers import (ROOT, Workdir, events, frames, individuals, kinds, read_jsonl, run_headless, snapshots,
+                     write_json)
 
 
 class FishRules(unittest.TestCase):
@@ -261,7 +262,7 @@ class FishRules(unittest.TestCase):
                                          inputs=[{"tick": 0, "catch": True}])
                 self.assertEqual([e["data"] for e in events(rows, "fish_caught")],
                                  [{"fish_id": "F1", "kind": kind, "yield": amount}])
-                self.assertEqual(snapshots(rows)[-1]["hold"], [kind] * amount)
+                self.assertEqual(kinds(snapshots(rows)[-1]["hold"]), [kind] * amount)
                 self.assertEqual(snapshots(rows)[-1]["fish"], [])
                 self.assertEqual(snapshots(rows)[-1]["player"]["catch_cd_ticks"],
                                  round(self.g["catch_cooldown_s"] * self.hz))
@@ -276,7 +277,7 @@ class FishRules(unittest.TestCase):
 
     def test_full_hold_does_not_try_smaller_school_or_start_cooldown(self):
         rows, _ = self.run_gather({"random_fish": False, "player": {"pos": [50, 10]},
-                                  "hold": ["bong_sung"] * (self.g["hold_capacity"] - 2),
+                                  "hold": individuals(["bong_sung"] * (self.g["hold_capacity"] - 2)),
                                   "fish": [self.fish(pos=[50, 10]), self.fish("F2", "ca_loc", [51, 10])]},
                                  inputs=[{"tick": 0, "catch": True}])
         self.assertEqual([e["data"] for e in events(rows, "hold_full")],

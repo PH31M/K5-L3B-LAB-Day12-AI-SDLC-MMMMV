@@ -1,0 +1,34 @@
+## 1. Fixture ngưỡng 30 (nguyên văn ticket)
+$ python3 -m chonoi.headless --mode gather --seed 1 --ticks 1 --scenario s30.json --out o30.jsonl
+  exit=0 
+  [{"type": "event", "tick": 1, "phase": "gather", "name": "spoiled", "data": {"item_id": "I1", "kind": "ca_linh", "location": "hold"}}]
+  khớp dòng mẫu của ticket: True
+
+## 2. Smoke bàn giao hai tiến trình
+$ python3 -m chonoi.headless --mode gather --seed 1 --ticks 10 --scenario s100.json --inputs in.json --out g.jsonl --inventory-out kho.json
+  exit=0 
+  file kho: {"items":[{"id":"I1","kind":"ca_linh","fresh":99.99166666666666}]}
+$ python3 -m chonoi.headless --mode quan --seed 1 --ticks 0 --inventory kho.json --out q.jsonl
+  exit=0 
+  snapshot quán tick 0 stock: [{"id": "I1", "kind": "ca_linh", "fresh": 99.992}]
+  id/kind giống, fresh = 100 − 2/240 (sau một lần hao ở bước gather), sai số ≤ 0.01: True
+
+## 3. Mã 2 cho kho đếm / sai schema
+$ python3 -m chonoi.headless --mode quan --seed 1 --ticks 0 --inventory dem.json --out bad.jsonl
+  exit=2 đầu vào sai: contract v1.2 không nhận file kho đếm theo loại
+$ python3 -m chonoi.headless --mode quan --seed 1 --ticks 0 --inventory trung-id.json --out bad.jsonl
+  exit=2 đầu vào sai: items: id trùng I1
+$ python3 -m chonoi.headless --mode quan --seed 1 --ticks 0 --inventory kind-la.json --out bad.jsonl
+  exit=2 đầu vào sai: items.I1: nguyên liệu lạ 'ca_map'
+$ python3 -m chonoi.headless --mode quan --seed 1 --ticks 0 --inventory fresh-ngoai-mien.json --out bad.jsonl
+  exit=2 đầu vào sai: items.I1: fresh phải hữu hạn trong [0, 100]
+
+## 4. day --days 2 --seed 7 --ticks 30000: chạy hai lần, so byte
+$ python3 -m chonoi.headless --mode day --days 2 --seed 7 --ticks 30000 --out d1.jsonl
+  exit=0 
+$ python3 -m chonoi.headless --mode day --days 2 --seed 7 --ticks 30000 --out d2.jsonl
+  exit=0 
+  sha256 3ab521b3584c2a65 / 3ab521b3584c2a65 — giống: True
+  event: {"current_end": 10, "current_start": 10, "current_warning": 10, "gather_end": 1, "quan_end": 1, "shop_end": 1}
+
+KẾT LUẬN: PASS

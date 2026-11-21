@@ -86,6 +86,26 @@ function countKinds(list) {
   }
   return { counts: out, spoiled };
 }
+// v1.2: kho/giỏ là mảng cá thể {id, kind, fresh}; reserved là mảng id. Vẫn đọc được kho đếm v1.1.
+const SPOIL = 30;
+function stockById(s) { const m = {}; for (const it of arr(s && s.stock)) if (it && typeof it === "object" && it.id) m[it.id] = it; return m; }
+function reservedKinds(s, c, byId) {
+  const r = c && c.reserved;
+  if (!Array.isArray(r)) return obj(r);
+  const m = byId || stockById(s), out = {};
+  for (const id of r) { const it = m[id]; if (it && it.kind) out[it.kind] = (out[it.kind] || 0) + 1; }
+  return out;
+}
+function freshByKind(list) { // {kind: {min, n}} trên hàng chưa ươn
+  const out = {};
+  for (const it of arr(list)) {
+    if (!it || typeof it !== "object" || typeof it.fresh !== "number" || it.fresh < SPOIL) continue;
+    const o = out[it.kind] || (out[it.kind] = { min: 101, n: 0 }); o.min = Math.min(o.min, it.fresh); o.n++;
+  }
+  return out;
+}
+const freshCol = (f) => (f >= 60 ? "#9cf07a" : f >= 40 ? "#ffd166" : "#ff8a65");
+const freshHc = (f) => (f >= 60 ? "#00ff66" : f >= 40 ? "#ffff00" : "#ff6666");
 function sceneOf(s) {
   if (!s) return "gather";
   const ph = s.phase;
@@ -197,7 +217,8 @@ function onSnapshot(s) {
     if (prev !== null) pushInput(true);       // trục đổi theo cảnh → gửi lại trạng thái phím ngay
   }
   if (sc === "gather" && s.meta && obj(s.meta.bounds).d) ST.gatherMeta = s.meta;
-  for (const c of arr(s.customers)) if (c && c.dish_id && c.reserved && Object.keys(obj(c.reserved)).length) learned.recipe[c.dish_id] = obj(c.reserved);
+  { const byId = stockById(s);
+    for (const c of arr(s.customers)) if (c && c.dish_id && c.reserved) { const r = reservedKinds(s, c, byId); if (Object.keys(r).length) learned.recipe[c.dish_id] = r; } }
   processEvents(s);
   for (const st of arr(s.stoves)) {
     if (!st || !st.id) continue;
@@ -260,8 +281,13 @@ function handleEvent(ev, s) {
     case "no_dish": addToast("Kho không đủ nguyên liệu cho món nào — khách không vào", "info"); break;
     case "cook_started": {
       SFX.pop();
-      if (d.dish_id && Array.isArray(d.items)) { const r = {}; for (const k of d.items) r[k] = (r[k] || 0) + 1; learned.recipe[d.dish_id] = r; }
-      if (d.dish_id && typeof d.base_price === "number") learned.price[d.dish_id] = d.base_price;
+      if (d.dish_id && Array.isArray(d.items)) { const r = {}; for (const it of d.items) { const k = it && typeof it === "object" ? it.kind : it; r[k] = (r[k] || 0) + 1; } learned.recipe[d.dish_id] = r; }
+      // v1.2: base_price đã chốt theo độ tươi — chỉ học giá niêm yết khi không có độ tươi trong payload
+      if (d.dish_id && typeof d.base_price === "number" && !(Array.isArray(d.items) && d.items.some((it) => it && typeof it === "object"))) learned.price[d.dish_id] = d.base_price;
+      if (Array.isArray(d.items) && d.items.length && typeof d.items[0] === "object" && typeof d.base_price === "number") {
+        const avg = d.items.reduce((a, it) => a + num(it.fresh), 0) / d.items.length;
+        const sp = stovePos(s, d.stove_id); if (sp) addFloat("quan", sp[0], sp[1] + 1.6, `Tươi ${Math.round(avg)}% → ${d.base_price}k`, freshCol(avg));
+      }
       const sp = stovePos(s, d.stove_id); if (sp) burst("quan", sp[0], sp[1], "spark", 8);
       break;
     }
@@ -287,8 +313,10 @@ function handleEvent(ev, s) {
     case "shop_end": ST.tot.daysDone++; break;
     case "day_start": ST.day = newDayStats(); ST.shopMsg = null; break;
     case "paused": case "resumed": SFX.pop(); break;
-    case "spoiled": addToast(`${kindName(d.kind)} đã ươn`, "warn"); break;
-    case "current_warning": addToast("Sắp có nước xiết!", "warn"); break;
+    case "spoiled": SFX.fail(); addToast(`${kindName(d.kind)} ${d.item_id || ""} đã ươn ${d.location === "stock" ? "trong kho" : "trong giỏ"} — không nấu được`, "warn"); break;
+    case "current_warning": SFX.alert(); ST.curWarn = { at: num(d.starts_at_phase_tick) }; addToast("🌊 Sắp có nước xiết ở tầng sâu (≥ 10 m)!", "warn"); break;
+    case "current_start": SFX.splash(); ST.curWarn = null; addToast(`🌊 Nước xiết ${num(d.direction) > 0 ? "→ sang phải" : "← sang trái"} trong ${secs(d.duration_ticks)} s`, "warn"); break;
+    case "current_end": ST.curWarn = null; if (d.reason === "elapsed") addToast("Nước xiết đã dịu", "info"); break;
     default: break;
   }
 }
@@ -1144,6 +1172,9 @@ function drawGather(s) {
   const oxyMax = num(p.oxygen_max_ticks, 0), oxy = num(p.oxygen_ticks, oxyMax), ratio = oxyMax ? oxy / oxyMax : 1;
   if (threat) warns.push({ icon: "🐊", text: `THỦY QUÁI! Cá Sấu cách ${threat.dist.toFixed(1)} m — tránh xa, bơi lên nông`, col: "#be5aff", hcCol: "#ff44ff", speed: 4 });
   if (pp && !atSurf && ratio < 0.25) warns.push({ icon: "🫁", text: oxy <= 0 ? "HẾT HƠI! Đang ngạt, mất Máu — nổi lên ngay" : `HẾT HƠI! Còn ${secs(oxy)} s oxy — nổi lên mặt nước`, col: "#ff4b4b", hcCol: "#ff3333", speed: 3 + (1 - ratio / 0.25) * 9 });
+  const cur = s.current && typeof s.current === "object" ? s.current : null;
+  if (cur) warns.push({ icon: "🌊", text: `NƯỚC XIẾT ${num(cur.direction) > 0 ? "→ đẩy sang phải" : "← đẩy sang trái"} · còn ${secs(cur.ticks_left)} s · chỉ ở độ sâu ≥ 10 m`, col: "#4fc3f7", hcCol: "#00ffff", speed: 2 });
+  else if (ST.curWarn && num(s.phase_tick) < ST.curWarn.at) warns.push({ icon: "🌊", text: `SẮP CÓ NƯỚC XIẾT sau ${secs(ST.curWarn.at - num(s.phase_tick))} s — lên tầng nông (< 10 m) để tránh`, col: "#4fc3f7", hcCol: "#00ffff", speed: 5 });
   drawWarnings(warns, HUD_H + 26);
   if (threat || (pp && !atSurf && ratio < 0.25)) screenFrame(threat ? "#be5aff" : "#ff4b4b", threat ? 4 : 3 + (1 - ratio / 0.25) * 9);
 
@@ -1242,8 +1273,13 @@ function hudGather(s, gm, p, pp, atSurf) {
   text(`Giỏ ${hold.length}/${cap || "?"}`, bx, r1, { size: 20, weight: 800, color: full ? "#ff7b6b" : "#ffe7b0", hcColor: full ? "#ffff00" : "#fff" }); bx += tw(`Giỏ ${hold.length}/${cap || "?"}`, 20, 800) + 14;
   const kinds = Object.keys(counts).sort();
   if (!kinds.length) { text("trống", bx, r1, { size: 18, color: "#cbbfa8" }); bx += 60; }
-  for (const k of kinds) { kindIcon(k, bx + 12, r1, 11); text(`×${counts[k]}`, bx + 28, r1, { size: 18, weight: 700 }); bx += 34 + tw(`×${counts[k]}`, 18, 700) + 12; }
-  if (spoiled) { text(`⚠ ${spoiled} ươn`, bx, r1, { size: 18, weight: 700, color: "#ff8a80" }); bx += 90; }
+  const hf = freshByKind(hold);
+  for (const k of kinds) {
+    kindIcon(k, bx + 12, r1, 11); text(`×${counts[k]}`, bx + 28, r1, { size: 18, weight: 700 }); bx += 34 + tw(`×${counts[k]}`, 18, 700) + 4;
+    if (hf[k]) { const t = `${Math.floor(hf[k].min)}%`; text(t, bx, r1, { size: 18, weight: 800, color: freshCol(hf[k].min), hcColor: freshHc(hf[k].min) }); bx += tw(t, 18, 800); }
+    bx += 12;
+  }
+  if (spoiled) { const t = `⚠ ${spoiled} ƯƠN (chiếm ô)`; text(t, bx, r1, { size: 18, weight: 800, color: "#ff8a80", hcColor: "#ff6666" }); bx += tw(t, 18, 800) + 12; }
   const plan = obj(obj(s.day_plan).ingredients);
   const pk = Object.keys(plan).sort();
   if (pk.length) {
@@ -1453,12 +1489,13 @@ function quanPrompt(s, tgt, hand) {
   return { text: `Món trên tay là của bàn ${owner ? owner.table_id : "khác"}`, border: "#ff6b6b" };
 }
 function stockInfo(s) {
-  const phys = {}, heldK = {};
-  if (Array.isArray(s.stock)) { for (const it of s.stock) if (it && it.kind && !(typeof it.fresh === "number" && it.fresh < 30)) phys[it.kind] = (phys[it.kind] || 0) + 1; }
+  const phys = {}, heldK = {}, byId = stockById(s);
+  let spoiled = 0;
+  if (Array.isArray(s.stock)) { for (const it of s.stock) { if (!it || !it.kind) continue; if (typeof it.fresh === "number" && it.fresh < SPOIL) { spoiled++; continue; } phys[it.kind] = (phys[it.kind] || 0) + 1; } }
   else for (const [k, v] of Object.entries(obj(s.stock))) phys[k] = num(v);
-  for (const c of arr(s.customers)) for (const [k, v] of Object.entries(obj(c && c.reserved))) heldK[k] = (heldK[k] || 0) + num(v);
+  for (const c of arr(s.customers)) for (const [k, v] of Object.entries(reservedKinds(s, c, byId))) heldK[k] = (heldK[k] || 0) + num(v);
   const avail = {}; for (const k of new Set([...Object.keys(phys), ...Object.keys(heldK)])) avail[k] = Math.max(0, num(phys[k]) - num(heldK[k]));
-  return { phys, held: heldK, avail };
+  return { phys, held: heldK, avail, spoiled, fresh: freshByKind(s.stock) };
 }
 
 function drawQuan(s) {
@@ -1599,17 +1636,19 @@ function hudQuan(s) {
   x += 5 * 24 + 4; text(rep.toFixed(1), x, HUD_H / 2 + 1, { size: 18, weight: 800 });
   topButtons();
   hudBg(H - BOT_H, BOT_H);
-  const r1 = H - BOT_H + 26, { avail, held: hk } = stockInfo(s);
+  const r1 = H - BOT_H + 26, { avail, held: hk, spoiled: spo, fresh: fk } = stockInfo(s);
   let bx = 14;
   text("Kho khả dụng:", bx, r1, { size: 18, weight: 800, color: "#ffe7b0" }); bx += tw("Kho khả dụng:", 18, 800) + 12;
   const ks = Object.keys(avail).sort();
   if (!ks.length) { text("trống", bx, r1, { size: 18, color: "#cbbfa8" }); bx += 60; }
-  const label = (k, long) => `${long ? kindName(k) + " " : ""}${avail[k]}${hk[k] ? ` (giữ ${hk[k]})` : ""}`;
+  const label = (k, long) => `${long ? kindName(k) + " " : ""}${avail[k]}${hk[k] ? ` (giữ ${hk[k]})` : ""}${fk[k] ? ` ${Math.floor(fk[k].min)}%` : ""}`;
   const longFits = ks.reduce((a, k) => a + 50 + tw(label(k, true), 18, 700), bx) < W - 230;
   for (const k of ks) {
     const t = label(k, longFits);
-    kindIcon(k, bx + 12, r1, 11); text(t, bx + 28, r1, { size: 18, weight: 700, color: avail[k] ? "#fff" : "#ff9f9f" }); bx += 40 + tw(t, 18, 700) + 10;
+    const col = !avail[k] ? "#ff9f9f" : fk[k] ? freshCol(fk[k].min) : "#fff";
+    kindIcon(k, bx + 12, r1, 11); text(t, bx + 28, r1, { size: 18, weight: 700, color: col, hcColor: fk[k] ? freshHc(fk[k].min) : "#fff" }); bx += 40 + tw(t, 18, 700) + 10;
   }
+  if (spo) { const t = `⚠ ${spo} ươn`; text(t, bx, r1, { size: 18, weight: 800, color: "#ff8a80", hcColor: "#ff6666" }); bx += tw(t, 18, 800) + 10; }
   const hand = handDish(s);
   text(hand ? `Tay: ${dishName(hand.dish_id)}` : "Tay trống", W - 14, r1, { size: 18, weight: 800, align: "right", color: hand ? "#a8f08a" : "#cbbfa8", hcColor: hand ? "#00ff66" : "#fff" });
   text("WASD/mũi tên đi · E nấu / bưng / dọn món · P tạm dừng · R chơi lại · C tương phản · M âm thanh", 14, H - 20, { size: 15, color: "#d8cbb0" });
@@ -1708,7 +1747,7 @@ function drawShop(s) {
   text(`Kết quả Ngày ${s.day ?? ""}`, px0 + 16, py + 22, { size: 19, weight: 800, color: "#ffd58a" });
   const repTxt = D.repStart !== null && D.repEnd !== null ? `${D.repStart.toFixed(1)} → ${D.repEnd.toFixed(1)}` : num(s.reputation).toFixed(1);
   text(`Khách phục vụ ${D.served} · bỏ về ${D.left} · tiền ca ${D.shiftEarned ?? "?"}k · boa ${D.tips}k`, px0 + 16, py + 52, { size: 17, weight: 700, max: pw - 30 });
-  text(`Uy tín ${repTxt} · Kho dư: ${Object.entries(obj(s.stock)).map(([k, v]) => `${kindName(k)} ${v}`).join(", ") || "trống"}`, px0 + 16, py + 80, { size: 16, weight: 600, color: "#e6dcc6", max: pw - 30 });
+  text(`Uy tín ${repTxt} · Kho dư: ${(Array.isArray(s.stock) ? Object.entries(countKinds(s.stock).counts) : Object.entries(obj(s.stock))).map(([k, v]) => `${kindName(k)} ${v}`).join(", ") || "trống"}`, px0 + 16, py + 80, { size: 16, weight: 600, color: "#e6dcc6", max: pw - 30 });
   if (ST.shopMsg && performance.now() - ST.shopMsg.t < 6000) text(ST.shopMsg.text, px0 + 16, py + 108, { size: 16, weight: 800, color: ST.shopMsg.good ? "#a8f08a" : "#ff9f8f", hcColor: ST.shopMsg.good ? "#00ff66" : "#ff6666", max: pw - 30 });
   button("Đóng Shop · sang ngày mới  [Enter]", px0 + pw + 20, py + 10, Math.min(360, W - px0 - pw - 40), 56, () => pulse("shop_done"), { size: 18, bg: "rgba(160,70,30,0.95)", border: "#ffd08a" });
   hudBg(H - BOT_H, BOT_H);

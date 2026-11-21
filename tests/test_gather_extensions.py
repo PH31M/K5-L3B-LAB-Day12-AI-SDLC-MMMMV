@@ -23,6 +23,10 @@ class GatherComponents(unittest.TestCase):
     def manifest(self, *, fresh=False, net=False, current=False, current_tuning=None):
         c = copy.deepcopy(self.base)
         c["extensions"] = []
+        # Manifest gốc đã là v1.2+ (có freshness); fresh=False dựng lại manifest v1.1 để so lõi đếm.
+        c.pop("freshness", None)
+        c["contract_version"] = "1.1"
+        c["tuning"]["gather"].pop("current", None)
         if fresh:
             c["contract_version"] = "1.2"
             c["freshness"] = {"initial": 100, "gather_decay_per_s": 0.5,
@@ -113,9 +117,10 @@ class GatherComponents(unittest.TestCase):
     def test_fresh_catch_allocates_one_id_per_item_and_starts_at_100(self):
         rows, _ = self.probe(self.manifest(fresh=True), {"fish": [self.fish("F1", 50, "ca_linh")]},
                              [{"catch": True}, {}])
-        received = events(rows, "fish_caught")[0]["data"]["item_ids"]
-        self.assertEqual(received, ["I1", "I2", "I3"])
+        # Payload fish_caught giữ nguyên v1.1 (không thêm item_ids); id mới đọc qua snapshot hold.
+        self.assertNotIn("item_ids", events(rows, "fish_caught")[0]["data"])
         first, second = snapshots(rows)[1:]
+        self.assertEqual([i["id"] for i in first["hold"]], ["I1", "I2", "I3"])
         self.assertEqual([i["fresh"] for i in first["hold"]], [100, 100, 100])
         self.assertTrue(all(abs(i["fresh"] - (100 - 2 / 240)) < 0.001 for i in second["hold"]))
 
@@ -124,8 +129,8 @@ class GatherComponents(unittest.TestCase):
                              {"player": {"pos": [50, 0]}, "hold": [self.item("I99", 80)],
                               "nodes": [{"id": "N1", "kind": "bong_sung", "pos": [50, 0]}]},
                              [{"interact": True}])
-        self.assertEqual(events(rows, "gather")[0]["data"]["item_ids"], ["I100"])
         hold = snapshots(rows)[-1]["hold"]
+        self.assertEqual([i["id"] for i in hold], ["I99", "I100"])
         self.assertEqual(hold[-1], self.item("I100", 100, "bong_sung"))
         self.assertAlmostEqual(hold[0]["fresh"], 80 - 2 / 240, delta=0.001)
 
@@ -198,14 +203,16 @@ class GatherComponents(unittest.TestCase):
         phase = {"contract": c, "scenario": {"player": {"pos": [50, 10]}, "random_fish": False,
                  "fish": [self.fish("F1", 50)], "nodes": [], "monsters": []}, "steps": [{"catch": True}]}
         rows, _ = self.probe(phases=[phase, {**phase, "day": 2}])
-        self.assertEqual([e["data"]["item_ids"] for e in events(rows, "fish_caught")], [["I1"], ["I2"]])
+        holds = [r["hold"] for r in rows if r["type"] == "snapshot" and r["tick"] == 1]
+        self.assertEqual([[i["id"] for i in h] for h in holds], [["I1"], ["I2"]])
 
     def test_net_fresh_items_get_unique_ids_for_every_caught_school(self):
         rows, _ = self.probe(self.manifest(fresh=True, net=True),
                              {"fish": [self.fish("F2", 51, "ca_linh"), self.fish("F10", 52)]},
                              [{"catch": True}], {"net": 2})
-        self.assertEqual([e["data"]["item_ids"] for e in events(rows, "fish_caught")],
-                         [["I1", "I2", "I3"], ["I4"]])
+        self.assertEqual([e["data"]["fish_id"] for e in events(rows, "fish_caught")], ["F2", "F10"])
+        self.assertEqual([(i["id"], i["kind"]) for i in snapshots(rows)[-1]["hold"]],
+                         [("I1", "ca_linh"), ("I2", "ca_linh"), ("I3", "ca_linh"), ("I4", "ca_loc")])
         self.assertEqual(len({i["id"] for i in snapshots(rows)[-1]["hold"]}), 4)
 
     @staticmethod

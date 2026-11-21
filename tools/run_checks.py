@@ -46,8 +46,10 @@ def check_unittest(tmp):
 
 
 def check_smoke(tmp):
+    # Contract v1.2: kho cá thể {id, kind, fresh}; smoke bàn giao theo TICKET-03 (cập bến ở frame 0)
+    hold = [{"id": f"I{i + 1}", "kind": k, "fresh": 100} for i, k in enumerate(["ca_loc", "bong_sung", "bong_sung"])]
     sc = write_json(os.path.join(tmp, "dock.json"),
-                    {"gather": {"hold": ["ca_loc", "bong_sung", "bong_sung"]}})
+                    {"gather": {"hold": hold, "random_fish": False, "monsters": []}})
     inp = write_json(os.path.join(tmp, "dock-inputs.json"),
                      {"frames": [{"tick": 0, "interact": True}]})
     inv = os.path.join(tmp, "catch.json")
@@ -68,8 +70,14 @@ def check_smoke(tmp):
         return False, f"quan exit {code}: {out.strip()[-200:]}"
     with open(q_out, encoding="utf-8") as f:
         snap = json.loads(f.readline())
-    want = {"bong_sung": 2, "ca_loc": 1}
-    return snap.get("stock") == want, f"kho ghi {saved.get('items')} -> quán đọc {snap.get('stock')}"
+    # So chính xác id, kind và độ tươi (sau một lần hao ở bước gather: 100 − 2/240) — dung sai ±0.01
+    stock = snap.get("stock") or []
+    items = saved.get("items") or []
+    ok = (isinstance(stock, list) and [(i["id"], i["kind"]) for i in stock]
+          == [(i["id"], i["kind"]) for i in items] == [("I1", "ca_loc"), ("I2", "bong_sung"), ("I3", "bong_sung")]
+          and all(abs(a["fresh"] - b["fresh"]) <= 0.01 and abs(b["fresh"] - (100 - 2 / 240)) <= 1e-9
+                  for a, b in zip(stock, items)))
+    return ok, f"kho ghi {items} -> quán đọc {stock}"
 
 
 def check_determinism(tmp):

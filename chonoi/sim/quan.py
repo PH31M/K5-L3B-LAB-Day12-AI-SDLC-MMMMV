@@ -8,7 +8,7 @@ Nhóm viết tiếp (PRD-0 mục F, Quán):
 """
 
 from ..ids import sort_by_id
-from . import quan_customers, quan_service
+from . import freshness, quan_customers, quan_service, quan_stock
 from .ramp import ramp_velocity
 
 TICK = 60.0
@@ -24,6 +24,8 @@ class QuanSim:
         self.menu = tuning["menu"]
         self.rng = streams
         self.ids = ids
+        self.tick_hz = tuning.get("tick_hz", 60)
+        self.freshness = tuning.get("freshness")  # v1.2+: kho cá thể + độ tươi
         self.day_plan = day_plan if day_plan is not None else scenario.get("day_plan")
         self.random_customers = scenario.get("random_customers", True)
         p = scenario.get("player", {})
@@ -32,7 +34,15 @@ class QuanSim:
         self._tgt = None
         self._ramp_left = 0
         # kho: --inventory HOẶC scenario.stock (cả hai -> cli đã báo mã 2)
-        self.stock = dict(inventory if inventory is not None else scenario.get("stock", {}))
+        if self.freshness is not None:
+            src = inventory if inventory is not None else scenario.get("stock", [])
+            # bàn giao trong bộ nhớ (day) mang units chính xác; file/scenario mang điểm `fresh`
+            self.stock = (freshness.copy_items(src) if src and "fresh_units" in src[0]
+                          else freshness.from_fixture(src))
+            for it in self.stock:
+                ids.reserve(it["id"])
+        else:
+            self.stock = dict(inventory if inventory is not None else scenario.get("stock", {}))
         self.hand = scenario.get("hand")
         self.time_left_ticks = scenario.get("time_left_ticks", int(round(t["duration_s"] * 60)))
         self.phase_tick = 0  # bắt đầu 0, tăng mỗi bước; lịch khách tính theo giá trị SAU tăng
@@ -43,6 +53,8 @@ class QuanSim:
         self.tables = self._merge(t["tables"], scenario.get("tables", []))
         # Khách dựng sẵn từ scenario: điền mặc định theo PRD-0 mục D.
         self.customers = [self._customer(c) for c in scenario.get("customers", [])]
+        if self.freshness is not None:
+            quan_stock.assign_fixture(self.customers, self.stock, self.menu, self.freshness)
         for e in self.customers:
             ids.reserve(e["id"])
         self.money = 0
@@ -62,10 +74,12 @@ class QuanSim:
             "patience_ticks_left": c.get("patience_ticks_left", int(round(self.t["patience_s"] * TICK))),
             "eat_ticks_left": c.get("eat_ticks_left", 0),
             "order_status": c.get("order_status", "reserved"),
-            "reserved": dict(c.get("reserved") or {}),
+            "reserved": dict(c.get("reserved") or {}) if self.freshness is None else list(c.get("reserved") or []),
             "base_price": c.get("base_price"),
             "tip": c.get("tip"),
         }
+        if self.freshness is not None:
+            return cu  # mảng id; quan_stock.assign_fixture kiểm/điền sau khi dựng đủ khách
         if cu["order_status"] == "reserved" and not cu["reserved"]:
             cu["reserved"] = dict(self.menu[cu["dish_id"]]["recipe"])
         return cu
@@ -84,7 +98,8 @@ class QuanSim:
         occupied = {c["table_id"]: c["id"] for c in self.customers}
         return {
             "player": {"pos": self.pos},
-            "stock": {k: self.stock[k] for k in sorted(self.stock) if self.stock[k] > 0},
+            "stock": (quan_stock.export_stock(self.stock) if self.freshness is not None
+                      else {k: self.stock[k] for k in sorted(self.stock) if self.stock[k] > 0}),
             "hand": self.hand,
             "stoves": [{k: s.get(k) for k in ("id", "pos", "state", "dish", "cook_ticks_left", "ready_ticks")}
                        for s in self.stoves],
@@ -96,6 +111,12 @@ class QuanSim:
         events = []
         self.phase_tick += 1
         self.time_left_ticks = max(0, self.time_left_ticks - 1)
+        # 0. v1.2: hao tươi kho thô (kể cả hàng đang giữ), phát hết `spoiled` theo id,
+        #    rồi mới xử lý các đơn có phần giữ vừa ươn (TICKET-03 "Thứ tự trong tick", Quán)
+        if self.freshness is not None:
+            spoiled = freshness.decay(self.stock, self.freshness, "quan_decay_per_s", self.tick_hz,
+                                      "stock", events)
+            quan_stock.handle_spoiled(self, spoiled, events)
         # 1. đồng hồ: timer nấu/ăn (lát 4) và kiên nhẫn khách (lát 3)
         events.extend(quan_service.advance_stoves_and_eating(self))
         quan_customers.tick_patience(self, events)

@@ -42,7 +42,8 @@ class GatherSim:
         return cls(tuning, scenario, streams, ids, day=day,
                    extensions=contract.get("extensions", ()), active_upgrades=active_upgrades)
 
-    def __init__(self, tuning, scenario, streams, ids, day=1, *, extensions=None, active_upgrades=None):
+    def __init__(self, tuning, scenario, streams, ids, day=1, *, extensions=None, active_upgrades=None,
+                 renew_hold_ids=False):
         t = tuning["gather"]
         self.t = t
         self.tick_hz = tuning["tick_hz"]
@@ -69,7 +70,9 @@ class GatherSim:
         self.catch_cd_ticks = p.get("catch_cd_ticks", 0)
         self.hold = list(scenario.get("hold", []))  # thứ tự nhặt, cuối mảng là mới nhất
         if self.freshness is not None:
-            self.hold = freshness.initialize(self.hold, ids)
+            # day: Ngày đầu giữ id của mẫu gather.hold; các Ngày kế cấp id mới theo thứ tự mảng.
+            self.hold = (freshness.renew_ids(self.hold, ids) if renew_hold_ids
+                         else freshness.initialize(self.hold, ids))
         self.time_left_ticks = scenario.get("time_left_ticks", int(round(t["duration_s"] * TICK)))
         # nút và đàn cá: scenario THAY THẾ danh sách mặc định; random_fish=false tắt cá mặc định
         src_nodes = scenario["nodes"] if "nodes" in scenario else t["nodes"]
@@ -99,9 +102,16 @@ class GatherSim:
         self.reason = None
 
     # --- giao diện cho runner -------------------------------------------------
-    def inventory_items(self) -> dict:
+    def inventory_items(self):
+        """Payload kho (file + gather_end.inventory): v1.2 mảng cá thể theo id, v1.1 object đếm."""
         if self.freshness is not None:
             return freshness.export(sort_by_id(self.hold))
+        return hold_to_items(self.hold)
+
+    def handoff_items(self):
+        """Bàn giao trong bộ nhớ cho `day`: giữ units chính xác, không qua số thực."""
+        if self.freshness is not None:
+            return freshness.copy_items(sort_by_id(self.hold))
         return hold_to_items(self.hold)
 
     def snapshot(self) -> dict:
@@ -131,11 +141,7 @@ class GatherSim:
         if self.done:
             return []
         events = []
-        if self.freshness is not None:
-            freshness.advance(self.hold, self.freshness, self.tick_hz, events)
-        if self.current is not None:
-            self.current.advance(events)
-        # 1. đồng hồ và hàng có sẵn: giảm bộ đếm, nút mọc lại
+        # 1. đầu bước (TICKET-03 "Thứ tự trong tick"): đồng hồ, cooldown, hồi nút, rồi độ tươi hàng có sẵn
         self.time_left_ticks = max(0, self.time_left_ticks - 1)
         self.invuln_ticks = max(0, self.invuln_ticks - 1)
         self.catch_cd_ticks = max(0, self.catch_cd_ticks - 1)
@@ -144,6 +150,11 @@ class GatherSim:
                 n["regrow_ticks"] -= 1
                 if n["regrow_ticks"] == 0:
                     events.append(("node_regrown", {"node_id": n["id"]}))
+        if self.freshness is not None:
+            freshness.advance(self.hold, self.freshness, self.tick_hz, events)
+        # 1b. lịch dòng lũ (extension current) trước khi bơi
+        if self.current is not None:
+            self.current.advance(events)
         # Cá có sẵn bơi trước tương tác; đàn mới chưa tham gia cho tới bước sau.
         if self._fish_schools is not None:
             self._fish_schools.advance(events)

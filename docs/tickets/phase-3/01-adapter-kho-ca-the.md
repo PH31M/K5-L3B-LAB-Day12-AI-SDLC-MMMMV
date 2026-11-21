@@ -4,7 +4,7 @@
 
 **Blocked by:** —
 
-**Status:** ready-for-agent
+**Status:** done — xem `docs/verification/phase-3.md`
 
 - [ ] `contract_version: "1.2"` + `freshness {initial: 100, gather_decay_per_s: 0.5, quan_decay_per_s: 0.25, spoiled_below: 30}`; kiểm dải hợp lệ.
 - [ ] Lớp kho: thêm cá thể với id tự cấp (`I1`, `I2`, … xuyên pha và xuyên Ngày), lấy theo id, lấy cá thể tươi nhất của một kind (hòa theo id), đếm theo kind, xuất mảng theo id.
