@@ -24,6 +24,8 @@ def load_contract(path=DEFAULT_PATH) -> dict:
     except (OSError, ValueError) as e:
         raise BadInput(f"không đọc được {path}: {e}")
     validate_tuning(c.get("tuning"))
+    # Sim chỉ nhận khối tuning; đưa danh sách extension vào để bật/tắt phần mở rộng.
+    c["tuning"].setdefault("extensions", list(c.get("extensions", [])))
     return c
 
 
@@ -213,7 +215,8 @@ def _validate_v11(t):
     if not isinstance(sh, dict) or not isinstance(sh.get("upgrades"), dict):
         raise BadInput("tuning.shop phải có max_ticks và upgrades")
     _int_between("shop.max_ticks", sh.get("max_ticks"), 1, 100_000)
-    for key, field in (("oxygen", "oxygen_max_s"), ("hp", "hp_max")):
+    for key, fields in (("oxygen", ("oxygen_max_s",)), ("hp", ("hp_max",)),
+                        ("net", ("catch_radius", "max_schools"))):
         arr = sh["upgrades"].get(key)
         if not isinstance(arr, list) or len(arr) != 2:
             raise BadInput(f"tuning.shop.upgrades.{key} phải có đúng 2 cấp")
@@ -221,9 +224,10 @@ def _validate_v11(t):
             if up.get("level") != j:
                 raise BadInput(f"tuning.shop.upgrades.{key}[{j - 1}].level phải bằng {j}")
             _int_between(f"shop.upgrades.{key}[{j - 1}].price", up.get("price"), 1, 10_000)
-            if not _num(up.get(field)) or up[field] <= 0:
-                raise BadInput(f"tuning.shop.upgrades.{key}[{j - 1}].{field} phải > 0")
-        if arr[1]["price"] <= arr[0]["price"] or arr[1][field] <= arr[0][field]:
+            for field in fields:
+                if not _num(up.get(field)) or up[field] <= 0:
+                    raise BadInput(f"tuning.shop.upgrades.{key}[{j - 1}].{field} phải > 0")
+        if arr[1]["price"] <= arr[0]["price"] or any(arr[1][f] <= arr[0][f] for f in fields):
             raise BadInput(f"tuning.shop.upgrades.{key}: cấp 2 phải đắt và mạnh hơn cấp 1")
 
 

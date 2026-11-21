@@ -53,7 +53,9 @@ class NetDayRules(unittest.TestCase):
     def test_full_school_does_not_block_later_smaller_school(self):
         rows = self.run_day(1, [self.fish("F2", 51, "ca_linh"), self.fish("F10", 52)],
                             hold=["bong_sung"] * (self.g["hold_capacity"] - 1))
-        self.assertEqual([e["name"] for e in events(rows)], ["hold_full", "fish_caught"])
+        # Bỏ event mở pha (day_start/day_plan/phase_start) — chỉ xét event của cú bắt
+        caught_events = [e["name"] for e in events(rows) if e["name"] in ("hold_full", "fish_caught")]
+        self.assertEqual(caught_events, ["hold_full", "fish_caught"])
         self.assertEqual([f["id"] for f in snapshots(rows)[-1]["fish"]], ["F2"])
 
     def test_net_cooldown_allows_second_press_exactly_30_ticks_later(self):

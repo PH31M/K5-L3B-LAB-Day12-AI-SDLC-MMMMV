@@ -2,12 +2,17 @@
 
 
 def gather_tuning(tuning, upgrades):
-    """Thông số ca sáng với các cấp đã có hiệu lực."""
+    """Thông số ca sáng với các cấp đã có hiệu lực (oxygen, hp, net)."""
     gather = dict(tuning["gather"])
     for upgrade, field in (("oxygen", "oxygen_max_s"), ("hp", "hp_max")):
         level = upgrades.get(upgrade, 0)
         if level:
             gather[field] = tuning["shop"]["upgrades"][upgrade][level - 1][field]
+    net = upgrades.get("net", 0)
+    if net:
+        spec = tuning["shop"]["upgrades"]["net"][net - 1]
+        gather["catch_radius"] = spec["catch_radius"]
+        gather["max_schools"] = spec["max_schools"]
     return gather
 
 

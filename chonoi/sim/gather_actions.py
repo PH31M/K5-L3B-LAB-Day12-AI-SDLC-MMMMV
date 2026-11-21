@@ -45,7 +45,8 @@ def handle_catch_fish(sim, events):
     level = sim.active_upgrades.get("net", 0) if "net" in sim.extensions else 0
     if level:
         upgrade = next(u for u in sim.shop_upgrades["net"] if u["level"] == level)
-        targets = [f for f in sort_by_id(eligible) if math.dist(sim.pos, f["pos"]) <= upgrade["radius"]]
+        radius = upgrade.get("catch_radius", upgrade.get("radius"))
+        targets = [f for f in sort_by_id(eligible) if math.dist(sim.pos, f["pos"]) <= radius]
         limit = upgrade["max_schools"]
     else:
         target = _nearest(eligible, sim.pos, sim.t["catch_radius"])

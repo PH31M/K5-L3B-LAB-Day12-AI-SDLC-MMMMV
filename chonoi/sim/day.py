@@ -93,7 +93,8 @@ class DaySim:
         if self.days_completed and "player" in scenario:
             for key in ("oxygen_ticks", "hp", "zero_oxy_ticks"):
                 scenario["player"].pop(key, None)
-        self.inner = GatherSim(tuning, scenario, self.streams, self.ids, day=self.day)
+        self.inner = GatherSim(tuning, scenario, self.streams, self.ids, day=self.day,
+                               active_upgrades=self.active_upgrades)
         self.inner.reputation = self.reputation
 
     def _start_quan(self):
