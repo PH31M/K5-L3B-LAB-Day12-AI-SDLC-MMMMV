@@ -10,9 +10,9 @@ Bằng chứng thô: `docs/proof/phase-4/`. Cột Kết quả ghi trạng thái 
 | AC | Mô tả yêu cầu | Cách kiểm tra | Bằng chứng kiểm chứng | Kết quả |
 |---|---|---|---|---|
 | **AC-P4-01** | `bench_cmd` đo FPS cảnh chuẩn 1280×720 (3s warm-up, 30s đo), xuất `bench.json` đúng 5 trường (`avg_fps, p1_low_fps, frames, measured_s, load_ms`), mã thoát 2 nếu thiếu Chrome | `python tools/bench.py --seed 42 --duration 30 --out bench.json` | Cần `docs/proof/phase-4/bench.json` | **Chưa đạt** (Đã có `tools/bench.py` do Văn Minh viết; chưa chạy 30s trên trình duyệt thật để commit artefact `bench.json`) |
-| **AC-P4-02** | `soak_cmd` chạy 10 Ngày headless bằng bot tất định không crash (`crashes == 0`, `days_completed == 10`), ghi `soak.json` | Chạy 10 ngày liên tục với bot tự động qua 3 pha gather → quan → shop | Cần `docs/proof/phase-4/soak.json` | **Chưa đạt** (Chưa có `tools/soak.py`, chưa có `soak_cmd` trong manifest, chưa có artefact `soak.json`) |
+| **AC-P4-02** | `soak_cmd` chạy 10 Ngày headless bằng bot tất định không crash (`crashes == 0`, `days_completed == 10`), ghi `soak.json` | Chạy 10 ngày liên tục với bot tự động qua 3 pha gather → quan → shop | `docs/proof/phase-4/soak.json` | **Đạt** (Đã có `tools/soak.py`, khai báo `soak_cmd`, chạy hoàn tất 10 ngày không crash `crashes == 0`, `days_completed == 10` trong 0.77s, artefact thật đã commit) |
 | **AC-P4-03** | 3 Cảnh báo nguy hiểm nhận biết ngay bằng chữ + biểu tượng (không phụ thuộc màu): 🐊 Thủy quái gần, 🫁 Hết hơi, 😡 Khách sắp giận. Đọc tốt trong Chế độ tương phản cao (phím `C`, `?hc=1`) | Mở trình duyệt thử 3 tình huống với phím `C`, nút HUD `👁️ Tương phản` và `?hc=1` | `docs/proof/phase-4/canh-bao-tuong-phan.md` | **Đạt** (Chữ viền đen 3.5px, icon trực quan, tắt hiệu ứng rườm rà, lưu `sessionStorage`, artefact thật đã commit) |
-| **AC-P4-04** | Đóng gói phát hành v1.0.0: `contract_version: "1.3"`, README 3 lệnh từ clone sạch, release zip không kèm `.git`, `CHANGELOG.md` theo phase | Clone repo vào thư mục tạm, chạy 3 lệnh README; kiểm tra commit tag | Cần `docs/proof/phase-4/release-v1.0.0.md` | **Chưa đạt** (Chưa nâng manifest lên contract 1.3, chưa gắn tag `phase-4` và tạo GitHub Release v1.0.0) |
+| **AC-P4-04** | Đóng gói phát hành v1.0.0: `contract_version: "1.3"`, README 3 lệnh từ clone sạch, release zip không kèm `.git`, `CHANGELOG.md` theo phase | Clone repo vào thư mục tạm, chạy 3 lệnh README; kiểm tra commit tag | Cần `docs/proof/phase-4/release-v1.0.0.md` | **Chưa đạt** (Đã nâng manifest lên contract 1.3, chưa gắn tag `phase-4` và tạo GitHub Release v1.0.0) |
 | **AC-P4-05** | Mở rộng Leaderboard: lưu top 10 điểm cục bộ, xuất JSON `{"entries":[{name,score,days_completed,seed}]}`, không đổi JSONL | Chạy `day` đủ 5 ngày với cờ `--leaderboard` và `--player-name` | Cần `docs/proof/phase-4/leaderboard.json` | **Chưa đạt** (Chưa triển khai code mở rộng leaderboard) |
 | **AC-P4-06** | Hồi quy toàn diện Regression P1–P3: toàn bộ test suite chạy xanh trên commit tag phát hành | `python -m unittest discover -s tests -v` | Cần `docs/proof/phase-4/regression-all.txt` | **Chưa đạt** (Chưa xuất artefact; hiện tại nhánh `main` đạt 191 tests OK, 0 skip khi chạy ngoài sandbox/CI) |
 
@@ -24,8 +24,11 @@ Bằng chứng thô: `docs/proof/phase-4/`. Cột Kết quả ghi trạng thái 
    - **Ticket 03 Phase 4 (Cảnh báo & Tương phản cao - Vinh):**
      - Mã nguồn: `chonoi/web/index.html`.
      - Tài liệu kiểm chứng: [canh-bao-tuong-phan.md](../proof/phase-4/canh-bao-tuong-phan.md).
+   - **Ticket 02 Phase 4 (Soak cmd — Cao Minh / Đức Minh):**
+     - Mã nguồn: `tools/soak.py`.
+     - Manifest: khai báo `soak_cmd` trong `game.contract.json`.
+     - Tài liệu kiểm chứng: [soak.json](../proof/phase-4/soak.json) (10 ngày, `crashes == 0`, `duration_s: 0.77s`).
 2. **Phần đang đợi các thành viên phụ trách hoàn tất artefact:**
-   - Ticket 01 (`bench_cmd` - Văn Minh): Cần chạy và commit `docs/proof/phase-4/bench.json`.
-   - Ticket 02 (`soak_cmd` - Cao Minh): Cần cài đặt `tools/soak.py` và chạy xuất `docs/proof/phase-4/soak.json`.
-   - Ticket 04 (Đóng gói Release v1.0.0 - Đức Minh): Cần nâng contract 1.3, tạo zip và Release notes.
-   - Phản tư cá nhân: Mỗi thành viên tự viết trong `docs/members/<handle>.md` (hiện có `qvinhh2312.md` và `trandinhnhatminh1452.md`).
+   - Ticket 01 (`bench_cmd` - Văn Minh): Cần chạy trên môi trường có Chrome và commit `docs/proof/phase-4/bench.json`.
+   - Ticket 04 (Đóng gói Release v1.0.0 - Đức Minh): Cần nâng contract 1.3, tạo zip và Release notes khi P2, P3 hoàn tất.
+   - Phản tư cá nhân: Mỗi thành viên tự viết trong `docs/members/<handle>.md` (hiện có `qvinhh2312.md`, `trandinhnhatminh1452.md`, `PH31M.md`).
