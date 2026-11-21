@@ -17,6 +17,12 @@ Nguồn trả lời ưu tiên: **Anh Năm hàng xóm** (trợ giảng AI ở tab
 | Q11 | 2026-11-21 | `bench_cmd` khi môi trường không có Google Chrome / Chromium? | Thoát mã 2 và in thông báo rõ ràng theo spec Phase 4 | Integrator |
 | Q12 | 2026-11-21 | `soak_cmd` bỏ trường `duration_s` khi kiểm tra tính tất định cùng seed? | Đúng, vì thời gian chạy phụ thuộc vào tải CPU phần cứng của máy chấm | QA |
 | Q13 | 2026-11-21 | Trạng thái Chế độ tương phản cao có cần lưu bền vững qua các phiên chơi? | Đúng, ghi nhớ trong `sessionStorage` của trình duyệt | UX/UI |
+| Q14 | 2026-11-21 | Manifest đã là `"1.3"` (Phase 4) khi bật luật kho cá thể — có phải hạ về `"1.2"`? | Không. Spec Phase 4: v1.3 chỉ thêm `bench_cmd`/`soak_cmd`, luật vẫn là v1.2. Adapter chọn schema theo việc manifest có khối `freshness` (bắt buộc từ 1.2 trở lên) | Integrator |
+| Q15 | 2026-11-21 | `gather`/`fish_caught` có thêm `item_ids` ở v1.2? | Không — ticket không đổi hai payload này; giữ đúng v1.1 để không vỡ test so payload. Id mới đọc qua snapshot `hold` (cấp I1, I2… theo thứ tự vào giỏ) | Integrator |
+| Q16 | 2026-11-21 | Ticket ghi gather "nếu còn giờ mới cập nhật cá và sinh thêm" ở cuối bước; P2 đang cho cá bơi trước tương tác (`test_catch_uses_position_after_fish_swimming`) | Giữ thứ tự P2 để không phá regression P1–P2; đã đổi phần v1.2 (hồi nút → hao tươi → lịch dòng lũ trước khi bơi). Cần hỏi giảng viên nếu muốn đổi | QA |
+| Q17 | 2026-11-21 | `customers[].reserved` ở v1.2 nhận `{}` (dạng v1.1)? | Không: phải là mảng id; object → mã 2. Bỏ trống thì sim tự giữ tươi nhất theo order_tick rồi id bàn | Integrator |
+| Q18 | 2026-11-21 | JSONL in `fresh` 3 chữ số (99.992) trong khi file kho in đủ (99.99166…) — có lệch schema? | Không: cùng schema, dung sai quan sát ±0.01 theo ticket; nhánh ngưỡng kiểm bằng event. File kho giữ đủ chính xác để đọc lại | QA |
+| Q19 | 2026-11-21 | Fixture `fresh` không biểu diễn được bằng units nguyên (vd. 29.999)? | Lưu phân số chính xác (không làm tròn về units), so ngưỡng trước làm tròn: 29.999 là ươn ngay | Integrator |
 
 ## Bàn giao PO — Nhật Minh, Phase 1 (2026-11-21)
 
@@ -32,5 +38,5 @@ Nguồn trả lời ưu tiên: **Anh Năm hàng xóm** (trợ giảng AI ở tab
 - Dependency kiểm được: `c84eac9` (v1.1 prefactor), `6187354` (thêm Cá Sấu). Adapter `Stock` v1.2 chưa có trong các nguồn đã kiểm; cần owner cung cấp API/commit trước khi ghép kho, không coi component probe là bằng chứng migration.
 - Quy ước kỹ thuật đề xuất cho net: mỗi cấp dùng `{level, price, radius, max_schools}`; đã chuẩn bị patch data đúng hai cấp của ticket. Integrator cần review tên trường và truyền `extensions` + `active_upgrades` vào gather.
 - Tính tuổi trong giỏ dùng đơn vị nguyên theo ADR-0001; giao diện handoff xuất `{id, kind, fresh}`, không làm tròn trước so ngưỡng. Chưa xác nhận `Stock.add/take/items` cụ thể; cần ghép lớp này sau khi owner bàn giao.
-- Current chỉ phát các event ticket đã định nghĩa: `current_warning` và `current_end`. Không tự thêm event bắt đầu. Validator cần nhận `random_current`/`current_direction`; lịch, hướng và lực đẩy đã kiểm ở lớp sim.
+- Current chỉ phát các event ticket đã định nghĩa: `current_warning` và `current_end`. Không tự thêm event bắt đầu. *(Cập nhật 2026-11-21, tích hợp P3: TICKET-03 định nghĩa `current_start {direction, duration_ticks}` trong bảng event — đã thêm.)* Validator cần nhận `random_current`/`current_direction`; lịch, hướng và lực đẩy đã kiểm ở lớp sim.
 - Bằng chứng: [Phase 2](proof/phase-2/nhat-minh.md), [Phase 3](proof/phase-3/nhat-minh.md).

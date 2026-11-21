@@ -3,7 +3,10 @@
 import json
 import unittest
 
-from helpers import ROOT, Workdir, events, frames, read_jsonl, run_headless, snapshots, write_json
+from helpers import (ROOT, Workdir, counts, events, frames, individuals, kinds, read_jsonl, run_headless,
+                     snapshots, write_json)
+
+FRESH_1 = 100 - 2 / 240  # v1.2: hàng có sẵn hao 2 units/tick trong giỏ
 
 
 class GatherActions(unittest.TestCase):
@@ -54,7 +57,7 @@ class GatherActions(unittest.TestCase):
         amount = self.g["node_yield"]
         self.assertEqual([e["data"] for e in events(rows, "gather")],
                          [{"node_id": "N2", "kind": "bong_sung", "amount": amount}])
-        self.assertEqual(snapshots(rows)[-1]["hold"], ["bong_sung"] * amount)
+        self.assertEqual(kinds(snapshots(rows)[-1]["hold"]), ["bong_sung"] * amount)
 
     def test_gather_uses_unrounded_distance(self):
         rows, _, _ = self.run_gather({"nodes": [self.node("N2", [51.0000004, 0]),
@@ -84,12 +87,12 @@ class GatherActions(unittest.TestCase):
 
     def test_gather_full_preserves_node_and_hold(self):
         hold = ["ca_loc"] * self.g["hold_capacity"]
-        rows, _, _ = self.run_gather({"hold": hold, "nodes": [self.node()]},
+        rows, _, _ = self.run_gather({"hold": individuals(hold), "nodes": [self.node()]},
                                      [{"tick": 0, "interact": True}])
         self.assertEqual([e["data"] for e in events(rows, "hold_full")],
                          [{"action": "gather", "node_id": "N1", "required": self.g["node_yield"], "free": 0}])
         last = snapshots(rows)[-1]
-        self.assertEqual(last["hold"], hold)
+        self.assertEqual(kinds(last["hold"]), hold)
         self.assertEqual(last["nodes"][0]["regrow_ticks"], 0)
         self.assertTrue(last["nodes"][0]["ready"])
         self.assertEqual(events(rows, "gather"), [])
@@ -97,9 +100,9 @@ class GatherActions(unittest.TestCase):
     def test_gather_exact_capacity_succeeds(self):
         amount = self.g["node_yield"]
         hold = ["ca_loc"] * (self.g["hold_capacity"] - amount)
-        rows, _, _ = self.run_gather({"hold": hold, "nodes": [self.node()]},
+        rows, _, _ = self.run_gather({"hold": individuals(hold), "nodes": [self.node()]},
                                      [{"tick": 0, "interact": True}])
-        self.assertEqual(snapshots(rows)[-1]["hold"], hold + ["bong_sung"] * amount)
+        self.assertEqual(kinds(snapshots(rows)[-1]["hold"]), hold + ["bong_sung"] * amount)
         self.assertEqual(events(rows, "hold_full"), [])
 
     def test_regrow_exact_tick_and_gather_in_same_step(self):
@@ -138,7 +141,7 @@ class GatherActions(unittest.TestCase):
                 self.assertEqual([e["data"] for e in events(rows, "fish_caught")],
                                  [{"fish_id": "F1", "kind": kind, "yield": amount}])
                 last = snapshots(rows)[-1]
-                self.assertEqual(last["hold"], [kind] * amount)
+                self.assertEqual(kinds(last["hold"]), [kind] * amount)
                 self.assertEqual(last["fish"], [])
                 self.assertEqual(last["player"]["catch_cd_ticks"],
                                  int(round(self.g["catch_cooldown_s"] * self.hz)))
@@ -159,13 +162,13 @@ class GatherActions(unittest.TestCase):
 
     def test_catch_full_keeps_school_no_fallback_or_cooldown(self):
         hold = ["bong_sung"] * (self.g["hold_capacity"] - 1)
-        rows, _, _ = self.run_gather({"player": {"pos": [50, 5]}, "hold": hold,
+        rows, _, _ = self.run_gather({"player": {"pos": [50, 5]}, "hold": individuals(hold),
                                       "fish": [self.fish(), self.fish("F2", "ca_loc", [51, 5])]},
                                      [{"tick": 0, "catch": True}])
         self.assertEqual([e["data"] for e in events(rows, "hold_full")],
                          [{"action": "catch", "fish_id": "F1", "required": self.g["fish_yield"]["ca_linh"], "free": 1}])
         last = snapshots(rows)[-1]
-        self.assertEqual(last["hold"], hold)
+        self.assertEqual(kinds(last["hold"]), hold)
         self.assertEqual(len(last["fish"]), 2)
         self.assertEqual(last["player"]["catch_cd_ticks"], 0)
         self.assertEqual(events(rows, "fish_caught"), [])
@@ -173,9 +176,9 @@ class GatherActions(unittest.TestCase):
     def test_catch_exact_capacity_succeeds(self):
         amount = self.g["fish_yield"]["ca_linh"]
         hold = ["bong_sung"] * (self.g["hold_capacity"] - amount)
-        rows, _, _ = self.run_gather({"player": {"pos": [50, 5]}, "hold": hold, "fish": [self.fish()]},
+        rows, _, _ = self.run_gather({"player": {"pos": [50, 5]}, "hold": individuals(hold), "fish": [self.fish()]},
                                      [{"tick": 0, "catch": True}])
-        self.assertEqual(snapshots(rows)[-1]["hold"], hold + ["ca_linh"] * amount)
+        self.assertEqual(kinds(snapshots(rows)[-1]["hold"]), hold + ["ca_linh"] * amount)
         self.assertEqual(events(rows, "hold_full"), [])
 
     def test_catch_surface_is_noop(self):
@@ -223,12 +226,16 @@ class GatherActions(unittest.TestCase):
     def test_dock_precedes_gather_and_time_and_writes_once(self):
         rows, inventory, _ = self.run_gather({"player": {"pos": self.g["dock_pos"]},
                                               "nodes": [self.node(pos=self.g["dock_pos"])],
-                                              "hold": ["ca_loc"], "time_left_ticks": 1},
+                                              "hold": individuals(["ca_loc"]), "time_left_ticks": 1},
                                              [{"tick": 0, "interact": True, "catch": True}], ticks=10)
-        saved = {"items": {"ca_loc": 1}}
-        self.assertEqual([(e["name"], e["data"]) for e in events(rows)],
-                         [("gather_end", {"reason": "docked", "inventory": saved})])
-        self.assertEqual(json.loads(inventory), saved)
+        saved = json.loads(inventory)
+        self.assertEqual([(i["id"], i["kind"]) for i in saved["items"]], [("I1", "ca_loc")])
+        self.assertAlmostEqual(saved["items"][0]["fresh"], FRESH_1, delta=0.01)
+        self.assertEqual([(e["name"], e["data"]["reason"]) for e in events(rows)], [("gather_end", "docked")])
+        # JSONL làm tròn số thực 3 chữ số (dung sai ±0.01); file kho giữ đủ độ chính xác để đọc lại
+        item = events(rows, "gather_end")[0]["data"]["inventory"]["items"][0]
+        self.assertEqual((item["id"], item["kind"]), ("I1", "ca_loc"))
+        self.assertAlmostEqual(item["fresh"], saved["items"][0]["fresh"], delta=0.01)
         self.assertEqual(rows[-1]["ticks"], 1)
         self.assertEqual(rows[-1]["reason"], "docked")
 
@@ -238,7 +245,7 @@ class GatherActions(unittest.TestCase):
                                              [{"tick": 0, "interact": True, "catch": True}])
         self.assertEqual([e["name"] for e in events(rows)], ["gather_end"])
         self.assertEqual(events(rows, "gather_end")[0]["data"]["reason"], "docked")
-        self.assertEqual(json.loads(inventory), {"items": {}})
+        self.assertEqual(json.loads(inventory), {"items": []})
         self.assertEqual(len(snapshots(rows)[-1]["fish"]), 1)
 
     def test_last_tick_action_included_in_saved_inventory(self):
@@ -250,7 +257,7 @@ class GatherActions(unittest.TestCase):
                 rows, inventory, _ = self.run_gather({**block, "time_left_ticks": 1},
                                                      [{"tick": 0, **buttons}], ticks=10)
                 self.assertEqual([e["name"] for e in events(rows)], [name, "gather_end"])
-                self.assertEqual(json.loads(inventory), {"items": {kind: amount}})
+                self.assertEqual(counts(json.loads(inventory)["items"]), {kind: amount})
                 self.assertEqual(events(rows, "gather_end")[0]["data"]["inventory"], json.loads(inventory))
                 self.assertEqual(rows[-1]["reason"], "time")
 

@@ -8,6 +8,7 @@ mới tiêu nguyên liệu (việc của lát 4).
 import math
 
 from ..ids import id_key
+from . import quan_stock
 from .quan_service import cancel_customer_order
 
 TICK = 60
@@ -29,7 +30,11 @@ def affordable_dishes(sim):
     """Món mà kho khả dụng (tồn trừ phần đang giữ) đủ nguyên liệu, sắp theo id.
     Trong `day`: lọc menu theo `day_plan.dishes` trước, rồi mới lọc nguyên liệu khả dụng.
     Quán độc lập dùng cả 6 món."""
-    held = _reserved_totals(sim)
+    if quan_stock.is_v12(sim):
+        avail = quan_stock.available_counts(sim)
+    else:
+        held = _reserved_totals(sim)
+        avail = {k: sim.stock.get(k, 0) - held.get(k, 0) for k in sim.stock}
     out = []
     if getattr(sim, "day_plan", None) and isinstance(sim.day_plan, dict) and "dishes" in sim.day_plan:
         candidate_dishes = sorted(sim.day_plan["dishes"])
@@ -39,7 +44,7 @@ def affordable_dishes(sim):
         if dish_id not in sim.menu:
             continue
         recipe = sim.menu[dish_id]["recipe"]
-        if all(sim.stock.get(k, 0) - held.get(k, 0) >= n for k, n in recipe.items()):
+        if all(avail.get(k, 0) >= n for k, n in recipe.items()):
             out.append(dish_id)
     return out
 
@@ -109,6 +114,8 @@ def spawn_due(sim, events):
         "base_price": None,
         "tip": None,
     })
+    if quan_stock.is_v12(sim):
+        quan_stock.reserve(sim, sim.customers[-1])  # luôn đủ vì món đã lọc theo kho khả dụng
     events.append(("customer_arrived", {"order_id": cid, "table_id": table["id"], "dish_id": dish_id}))
 
 

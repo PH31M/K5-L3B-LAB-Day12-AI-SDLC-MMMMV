@@ -3,6 +3,7 @@
 - Trạng thái: **chấp nhận** (change request Phase 3)
 - Ngày, người quyết: Phase 3 kickoff — Integrator + QA, cả nhóm chốt
 - Thay thế: schema kho đếm của v1.0/v1.1
+- Đã bật: 2026-11-21 (tích hợp Phase 3) — điều kiện bật đạt, bằng chứng `docs/proof/phase-3/do-tuoi/`. Cách làm thực tế: adapter chọn schema theo việc manifest có `freshness`; kho quán ở `chonoi/sim/quan_stock.py` thay cho lớp `Stock` dự kiến.
 
 ## Bối cảnh
 
@@ -49,10 +50,10 @@ trên schema mới.
 | Kho + adapter | `chonoi/inventory.py` | `test_smoke_p1.py` (integration), `test_python_starter_units.py` | Cao Minh |
 | Contract | `chonoi/contract.py` (thêm `freshness`, version 1.2) | `test_python_starter_units.py` | Cao Minh |
 | Lặn | `chonoi/sim/gather.py`, `chonoi/sim/gather_actions.py` | `test_gather_rules.py`, `test_gather_actions.py` | Nhật Minh |
-| Quán | `chonoi/sim/quan.py`, `quan_customers.py`, `quan_service.py` | `test_quan_rules.py`, `test_quan_service.py` | Đức Minh |
+| Quán | `chonoi/sim/quan.py`, `quan_customers.py`, `quan_service.py`, `quan_stock.py` (mới) | `test_quan_rules.py`, `test_quan_service.py` | Đức Minh |
 | Bàn giao / day | `chonoi/runner.py`, `chonoi/sim/day.py` (P2) | `test_day*.py` (P2) | Cao Minh |
 | HUD | `chonoi/web/index.html` | — (kiểm bằng mắt + ảnh) | Vinh |
-| QA | `tests/test_migration_v12.py` (mới), `docs/verification/phase-3.md` | tất cả | Văn Minh |
+| QA | `tests/test_freshness_v12.py` (mới, thay tên dự kiến `test_migration_v12.py`), `docs/verification/phase-3.md` | tất cả | Văn Minh |
 | Ghi chép | `CHANGELOG.md`, `docs/clarify.md` | — | Đức Minh |
 
 ## Cách cập nhật fixture (ghi vào CHANGELOG)

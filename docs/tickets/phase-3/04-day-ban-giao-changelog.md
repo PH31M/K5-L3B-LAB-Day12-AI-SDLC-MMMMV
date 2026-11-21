@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (mềm: 02, 03; cần Phase 2 có `day`)
 
-**Status:** ready-for-agent
+**Status:** done — xem `docs/verification/phase-3.md`
 
 - [ ] Bàn giao `gather → quan` trong cùng tick: hàng không hao thêm, ca quán chạy từ bước sau; id giữ nguyên.
 - [ ] Ngày đầu giữ đúng id trong `gather.hold` của mẫu; các Ngày kế cấp id mới theo thứ tự mảng với `kind/fresh` ban đầu.

@@ -49,6 +49,24 @@ def events(rows, name=None):
     return [r for r in rows if r["type"] == "event" and (name is None or r["name"] == name)]
 
 
+def individuals(kinds, start=1, fresh=100):
+    """Fixture kho cá thể v1.2 từ danh sách kind: I<start>, I<start+1>, ... theo thứ tự (vào giỏ)."""
+    return [{"id": f"I{start + i}", "kind": k, "fresh": fresh} for i, k in enumerate(kinds)]
+
+
+def kinds(items):
+    """Dãy kind của mảng cá thể (giữ thứ tự) — so luật v1.1 (thứ tự nhặt, LIFO) trên schema v1.2."""
+    return [it["kind"] for it in items]
+
+
+def counts(items):
+    """Đếm theo kind (sắp theo kind) — so số lượng như kho đếm v1.1."""
+    out = {}
+    for it in items:
+        out[it["kind"]] = out.get(it["kind"], 0) + 1
+    return {k: out[k] for k in sorted(out)}
+
+
 def close(a, b, tol=0.1):
     return abs(a - b) <= tol
 

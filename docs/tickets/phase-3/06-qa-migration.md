@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done — xem `docs/verification/phase-3.md`
 
 - [ ] `tests/test_migration_v12.py`: file kho đếm ở v1.2 → mã 2; file cá thể ở v1.1 → mã 2; đọc/ghi vòng tròn giữ nguyên id, kind, fresh.
 - [ ] Ca biên độ tươi: `fresh` đúng 30 ở tick 0 → `spoiled` tick 1; 30.0 so số nguyên; nhiều cá thể cùng vượt ngưỡng → thứ tự theo id.

@@ -9,7 +9,8 @@ Nguồn: PRD-0 §E/§F + docs/plan/phase-1-conformance.md §6.
 import json
 import unittest
 
-from helpers import Workdir, events, frames, read_jsonl, run_headless, snapshots, write_json
+from helpers import (Workdir, counts, events, frames, individuals, kinds, read_jsonl, run_headless,
+                     snapshots, write_json)
 
 TICK = 60
 
@@ -71,7 +72,7 @@ class Choke(Base):
     def test_faint_bo_gio_lifo_va_kho_rong(self):
         """Máu 1 + đang ngạt: ngất ở tick 59, giỏ mất theo LIFO, kho rỗng."""
         sc = {"gather": {"player": {"pos": [50, 10], "hp": 1, "oxygen_ticks": 0, "zero_oxy_ticks": 0},
-                         "hold": ["bong_sung", "ca_loc", "ca_linh"]}}
+                         "hold": individuals(["bong_sung", "ca_loc", "ca_linh"])}}
         with Workdir() as w:
             inv = w.path("inv.json")
             args = ["--mode", "gather", "--seed", "1", "--ticks", "80",
@@ -87,12 +88,13 @@ class Choke(Base):
             faint = events(rows, "faint")[0]["data"]
             self.assertEqual(faint["cause"], "choke")
             self.assertEqual(faint["hp"], 0)
-            self.assertEqual(faint["lost"], ["ca_linh", "ca_loc", "bong_sung"])
+            self.assertEqual(kinds(faint["lost"]), ["ca_linh", "ca_loc", "bong_sung"])
+            self.assertEqual([i["id"] for i in faint["lost"]], ["I3", "I2", "I1"])  # v1.2: LIFO theo cá thể
             end = events(rows, "gather_end")[0]
             self.assertEqual(end["data"]["reason"], "fainted")
-            self.assertEqual(end["data"]["inventory"]["items"], {})
+            self.assertEqual(end["data"]["inventory"]["items"], [])
             with open(inv, encoding="utf-8") as f:
-                self.assertEqual(json.load(f), {"items": {}})
+                self.assertEqual(json.load(f), {"items": []})
 
     def test_noi_len_dung_tick_dang_le_ngat_thi_khong_ngat(self):
         """Oxy 0, tick 1 nổi lên mặt: hồi oxy, bộ đếm ngạt về 0, không có choke."""
@@ -115,13 +117,13 @@ class Harvest(Base):
             self.assertEqual(len(ev), 1, [(e["name"], e["data"]) for e in events(rows)])
             self.assertEqual(ev[0]["data"]["node_id"], "N2")
             self.assertEqual(ev[0]["data"], {"node_id": "N2", "kind": "bong_sung", "amount": 1})
-            self.assertEqual(self.snaps(rows)[5]["hold"], ["bong_sung"])
+            self.assertEqual(kinds(self.snaps(rows)[5]["hold"]), ["bong_sung"])
 
     def test_gio_day_thi_hold_full_khong_dat_regrow(self):
         """Giỏ 12/12: hold_full có action/node_id/required/free, nút vẫn ready."""
         g = tuning()
         sc = {"gather": {"player": {"pos": [12, 0]},
-                         "hold": ["ca_loc"] * g["hold_capacity"],
+                         "hold": individuals(["ca_loc"] * g["hold_capacity"]),
                          "nodes": [{"id": "N1", "kind": "bong_dien_dien", "pos": [12, 0]}]}}
         with Workdir() as w:
             rows = self.run_gather(w, sc, [{"tick": 0, "interact": True}], ticks=5)
@@ -180,7 +182,7 @@ class Dock(Base):
         """Đứng [2,2] (trong bán kính 3, d = 2): interact ⇒ docked, không cần ở mặt nước."""
         with Workdir() as w:
             inv = w.path("inv.json")
-            sc = {"gather": {"player": {"pos": [2, 2]}, "hold": ["ca_loc"]}}
+            sc = {"gather": {"player": {"pos": [2, 2]}, "hold": individuals(["ca_loc"])}}
             args = ["--mode", "gather", "--seed", "1", "--ticks", "5",
                     "--scenario", write_json(w.path("sc.json"), sc),
                     "--inputs", write_json(w.path("in.json"), frames({"tick": 0, "interact": True})),
@@ -190,13 +192,13 @@ class Dock(Base):
             rows = read_jsonl(w.path("o.jsonl"))
             self.assertEqual(events(rows, "gather_end")[0]["data"]["reason"], "docked")
             with open(inv, encoding="utf-8") as f:
-                self.assertEqual(json.load(f), {"items": {"ca_loc": 1}})
+                self.assertEqual(counts(json.load(f)["items"]), {"ca_loc": 1})
 
     def test_het_gio_duoi_sau_van_giu_gio(self):
         """Hết giờ khi đang ở d = 20: gather_end 'time', kho vẫn có món."""
         with Workdir() as w:
             inv = w.path("inv.json")
-            sc = {"gather": {"player": {"pos": [50, 20]}, "hold": ["ca_loc", "bong_sung"],
+            sc = {"gather": {"player": {"pos": [50, 20]}, "hold": individuals(["ca_loc", "bong_sung"]),
                              "time_left_ticks": 3}}
             args = ["--mode", "gather", "--seed", "1", "--ticks", "100",
                     "--scenario", write_json(w.path("sc.json"), sc),
@@ -208,7 +210,7 @@ class Dock(Base):
             self.assertEqual(len(end), 1)
             self.assertEqual((end[0]["tick"], end[0]["data"]["reason"]), (3, "time"))
             with open(inv, encoding="utf-8") as f:
-                self.assertEqual(json.load(f), {"items": {"bong_sung": 1, "ca_loc": 1}})
+                self.assertEqual(counts(json.load(f)["items"]), {"bong_sung": 1, "ca_loc": 1})
 
 
 if __name__ == "__main__":

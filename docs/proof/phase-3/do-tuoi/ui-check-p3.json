@@ -1,0 +1,87 @@
+{
+  "gather_hold": {
+    "hold": [
+      {
+        "id": "I1",
+        "kind": "ca_loc",
+        "fresh": 94.1
+      },
+      {
+        "id": "I2",
+        "kind": "ca_linh",
+        "fresh": 44.1
+      },
+      {
+        "id": "I3",
+        "kind": "ca_linh",
+        "fresh": 29.12
+      },
+      {
+        "id": "I4",
+        "kind": "bong_sung",
+        "fresh": 11.1
+      }
+    ],
+    "errors": []
+  },
+  "current": {
+    "warning_seen_at_phase_tick": 1721,
+    "current": {
+      "direction": -1,
+      "ticks_left": 364
+    },
+    "depth": 12.133333333333335,
+    "x_drift_1s_no_input": -1.525,
+    "errors": []
+  },
+  "quan": {
+    "reserved_after_spoil": [
+      "I2"
+    ],
+    "order_status": "reserved",
+    "spoiled_events": [
+      {
+        "item_id": "I1",
+        "kind": "ca_loc",
+        "location": "stock"
+      }
+    ],
+    "cook_started": {
+      "stove_id": "B1",
+      "order_id": "C1",
+      "dish_id": "ca_loc_nuong_trui",
+      "items": [
+        {
+          "id": "I2",
+          "kind": "ca_loc",
+          "fresh": 71.7125
+        }
+      ],
+      "base_price": 43
+    },
+    "stock_after": [
+      {
+        "id": "I1",
+        "kind": "ca_loc",
+        "fresh": 29.5475
+      },
+      {
+        "id": "I3",
+        "kind": "bong_sung",
+        "fresh": 87.5375
+      },
+      {
+        "id": "I4",
+        "kind": "bong_sung",
+        "fresh": 40.5375
+      },
+      {
+        "id": "I5",
+        "kind": "ca_linh",
+        "fresh": 17.5375
+      }
+    ],
+    "errors": [],
+    "errors_after_hc": []
+  }
+}

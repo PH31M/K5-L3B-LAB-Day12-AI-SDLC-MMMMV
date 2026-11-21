@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done — xem `docs/verification/phase-3.md`
 
 - [ ] Hái/bắt tạo cá thể mới với `fresh = 100` và id tự cấp; `gather`/`fish_caught` phát cá thể vừa nhận (ít nhất `item_ids`).
 - [ ] Đầu mỗi bước: hàng **có sẵn** trong giỏ hao 2 đơn vị/tick (0.5/s), kẹp đáy 0; hàng mới nhận không hao ở bước đó.

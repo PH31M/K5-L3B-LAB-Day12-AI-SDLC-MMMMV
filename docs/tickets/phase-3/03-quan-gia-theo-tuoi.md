@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done — xem `docs/verification/phase-3.md`
 
 - [ ] Kho quán là mảng cá thể; hao 1 đơn vị/tick (0.25/s) kể cả hàng đang giữ chỗ; pause dừng hao.
 - [ ] Đầu bước: hao kho thô → phát hết `spoiled {..., location:"stock"}` theo id → **rồi** mới xử lý giữ chỗ bị ươn.

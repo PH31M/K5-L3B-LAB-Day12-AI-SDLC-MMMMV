@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .contract import load_contract
 from .errors import BadInput
 from .inputs import BUTTONS_V11, LiveInputs
-from .inventory import read_inventory
+from .inventory import individual_schema, read_inventory
 from .runner import Session
 from .scenario import load_scenario
 
@@ -245,7 +245,7 @@ def main(argv=None) -> int:
         # Sáng tạo chỉ ở bản live (tắt ở headless): lặn/nổi nhanh hơn cho dễ chơi trên màn hình.
         tuning["gather"] = dict(tuning["gather"], live_vertical_speed_mult=a.dive_speed_mult)
         scenario = load_scenario(a.scenario, a.mode, tuning)
-        inventory = read_inventory(a.inventory) if a.inventory else None
+        inventory = read_inventory(a.inventory, individual=individual_schema(tuning)) if a.inventory else None
         if inventory is not None and "stock" in scenario:
             raise BadInput("vừa có quan.stock vừa có --inventory")
         game = LiveGame(a.mode, tuning, scenario, a.seed, inventory, a.inventory_out, days=a.days or 5)

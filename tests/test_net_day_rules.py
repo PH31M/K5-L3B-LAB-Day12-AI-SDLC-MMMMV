@@ -9,7 +9,7 @@ from pathlib import Path
 import shutil
 import unittest
 
-from helpers import ROOT, Workdir, events, frames, read_jsonl, run_headless, snapshots, write_json
+from helpers import ROOT, Workdir, events, frames, individuals, read_jsonl, run_headless, snapshots, write_json
 
 
 class NetDayRules(unittest.TestCase):
@@ -25,7 +25,7 @@ class NetDayRules(unittest.TestCase):
         with Workdir() as w:
             sc = write_json(w.path("scenario.json"), {"day": {"upgrades": {"net": level}},
                     "gather": {"player": {"pos": [50, 10]}, "nodes": [], "fish": fish,
-                               "hold": list(hold), "random_fish": False, "monsters": []}})
+                               "hold": individuals(hold), "random_fish": False, "monsters": []}})
             inp = write_json(w.path("inputs.json"), frames(*(inputs or [{"tick": 0, "catch": True}])))
             out = w.path("out.jsonl")
             code, err = run_headless("--mode", "day", "--days", "1", "--seed", "1", "--ticks", str(ticks),

@@ -8,8 +8,15 @@
   "bench_cmd": "python3 tools/bench.py",
   "soak_cmd": "python3 tools/soak.py",
   "extensions": [
-    "net"
+    "net",
+    "current"
   ],
+  "freshness": {
+    "initial": 100,
+    "gather_decay_per_s": 0.5,
+    "quan_decay_per_s": 0.25,
+    "spoiled_below": 30
+  },
   "tuning": {
     "tick_hz": 60,
     "gather": {
@@ -36,6 +43,13 @@
       "start_heading_deg": 0,
       "swim_speed": 4.0,
       "ramp_max_ticks": 6,
+      "current": {
+        "interval_ticks": 1800,
+        "duration_ticks": 480,
+        "warning_ticks": 120,
+        "min_depth": 10,
+        "speed": 1.5
+      },
       "surface_depth": 0.5,
       "oxygen_max_s": 30,
       "oxygen_refill_per_tick": 6,

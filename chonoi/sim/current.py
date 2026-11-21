@@ -25,6 +25,8 @@ class Current:
             self.direction = (self.locked_direction if self.locked_direction is not None
                               else self.streams.get("current").choice((-1, 1)))
             self.ends_at = self.phase_tick + self.t["duration_ticks"]
+            events.append(("current_start", {"direction": self.direction,
+                                             "duration_ticks": self.t["duration_ticks"]}))
 
     def displacement(self, start_depth):
         if self.direction is None or start_depth < self.t["min_depth"]:

@@ -1,4 +1,7 @@
-"""Shop cuối ngày trong contract v1.1."""
+"""Shop cuối ngày trong contract v1.1 (v1.2: stock là mảng cá thể, không hao)."""
+
+from ..ids import sort_by_id
+from .freshness import export
 
 
 def gather_tuning(tuning, upgrades):
@@ -28,6 +31,9 @@ class ShopSim:
         self.done = False
 
     def snapshot(self):
+        # v1.2: hàng thô ở Shop giữ schema cá thể và KHÔNG hao tươi (Shop không gọi decay)
+        if isinstance(self.stock, list):
+            return {"stock": export(sort_by_id(self.stock))}
         return {"stock": {kind: n for kind, n in sorted(self.stock.items()) if n > 0}}
 
     def step(self, inp):

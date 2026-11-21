@@ -4,7 +4,7 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** done — xem `docs/verification/phase-3.md`
 
 - [ ] Manifest `gather.current {interval_ticks, duration_ticks, warning_ticks, min_depth, speed}`; `extensions` có `current`.
 - [ ] Lịch: `t = 1800·k` (k ≥ 1); báo trước ở `t−120` bằng `current_warning {starts_at_phase_tick}`; bắt đầu **trước** di chuyển ở `t`, kéo dài 480 tick.

@@ -3,7 +3,7 @@
 from pathlib import Path
 import unittest
 
-from helpers import Workdir, events, frames, read_jsonl, run_headless, snapshots, write_json
+from helpers import Workdir, events, frames, individuals, read_jsonl, run_headless, snapshots, write_json
 
 
 class DayLoop(unittest.TestCase):
@@ -20,7 +20,7 @@ class DayLoop(unittest.TestCase):
     def test_phase_events_keep_old_phase_and_snapshot_resets_phase_tick(self):
         with Workdir() as w:
             rows = self.run_day(w, {
-                "gather": {"hold": ["ca_loc"], "time_left_ticks": 1},
+                "gather": {"hold": individuals(["ca_loc"]), "time_left_ticks": 1},
                 "quan": {"time_left_ticks": 1},
             }, 5, {"tick": 2, "shop_done": True}, snapshot_every=99)
         self.assertEqual([(e["tick"], e["phase"], e["name"]) for e in events(rows)], [
@@ -30,8 +30,13 @@ class DayLoop(unittest.TestCase):
         ])
         snaps = snapshots(rows)
         self.assertEqual([(s["phase_tick"], s["sim_tick"]) for s in snaps], [(0, 0), (0, 1), (0, 2), (1, 3)])
-        self.assertEqual(snaps[1]["stock"], {"ca_loc": 1})
-        self.assertEqual(snaps[2]["stock"], {"ca_loc": 1})
+        # v1.2: bàn giao cùng tick giữ id, không hao thêm (giỏ 2 units ở tick 1); quán hao 1 unit ở tick 2;
+        # Shop không hao.
+        self.assertEqual([(i["id"], i["kind"]) for i in snaps[1]["stock"]], [("I1", "ca_loc")])
+        self.assertAlmostEqual(snaps[1]["stock"][0]["fresh"], 100 - 2 / 240, delta=0.01)
+        self.assertEqual([(i["id"], i["kind"]) for i in snaps[2]["stock"]], [("I1", "ca_loc")])
+        self.assertAlmostEqual(snaps[2]["stock"][0]["fresh"], 100 - 3 / 240, delta=0.01)
+        self.assertEqual(snaps[3]["stock"], snaps[2]["stock"])
         self.assertEqual(rows[-1]["days_completed"], 1)
         self.assertEqual(rows[-1]["reason"], "days_complete")
 
@@ -115,7 +120,7 @@ class DayLoop(unittest.TestCase):
         with Workdir() as w:
             rows = self.run_day(w, {
                 "day": {"day_plan": {"1": {"dishes": {"goi_bong_sung": 3}}}},
-                "gather": {"time_left_ticks": 1, "hold": ["ca_loc"]},
+                "gather": {"time_left_ticks": 1, "hold": individuals(["ca_loc"])},
             }, 121)
         self.assertEqual(events(rows, "day_plan")[0]["data"]["ingredients"], {"bong_sung": 6})
         self.assertEqual([e["tick"] for e in events(rows, "no_dish")], [121])
@@ -125,20 +130,20 @@ class DayLoop(unittest.TestCase):
         with Workdir() as w:
             rows = self.run_day(w, {
                 "gather": {"player": {"pos": [20, 10], "oxygen_ticks": 0, "zero_oxy_ticks": 59, "hp": 1},
-                           "hold": ["ca_loc"]},
+                           "hold": individuals(["ca_loc"])},
             }, 1)
-        self.assertEqual(events(rows, "gather_end")[0]["data"], {"reason": "fainted", "inventory": {"items": {}}})
-        self.assertEqual((snapshots(rows)[-1]["phase"], snapshots(rows)[-1]["stock"]), ("quan", {}))
+        self.assertEqual(events(rows, "gather_end")[0]["data"], {"reason": "fainted", "inventory": {"items": []}})
+        self.assertEqual((snapshots(rows)[-1]["phase"], snapshots(rows)[-1]["stock"]), ("quan", []))
 
     def test_reserved_fixture_is_checked_against_the_actual_handoff(self):
         with Workdir() as w:
             scenario = {
-                "gather": {"time_left_ticks": 1, "hold": ["ca_loc"]},
+                "gather": {"time_left_ticks": 1, "hold": individuals(["ca_loc"])},
                 "quan": {"customers": [{"id": "C1", "table_id": "T1", "dish_id": "ca_loc_nuong_trui",
-                                        "reserved": {"ca_loc": 1}}]},
+                                        "reserved": ["I1"]}]},
             }
             rows = self.run_day(w, scenario, 1)
-            self.assertEqual(snapshots(rows)[-1]["customers"][0]["reserved"], {"ca_loc": 1})
+            self.assertEqual(snapshots(rows)[-1]["customers"][0]["reserved"], ["I1"])
             scenario["gather"]["hold"] = []
             sc = write_json(w.path("bad.json"), scenario)
             code, _ = run_headless("--mode", "day", "--seed", "42", "--scenario", sc, "--ticks", "1",

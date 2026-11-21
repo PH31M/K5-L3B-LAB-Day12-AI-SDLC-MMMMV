@@ -24,9 +24,47 @@ def load_contract(path=DEFAULT_PATH) -> dict:
     except (OSError, ValueError) as e:
         raise BadInput(f"không đọc được {path}: {e}")
     validate_tuning(c.get("tuning"))
+    extensions = c.get("extensions", [])
+    if not isinstance(extensions, list) or not all(isinstance(e, str) for e in extensions):
+        raise BadInput("extensions phải là mảng chuỗi")
     # Sim chỉ nhận khối tuning; đưa danh sách extension vào để bật/tắt phần mở rộng.
-    c["tuning"].setdefault("extensions", list(c.get("extensions", [])))
+    c["tuning"].setdefault("extensions", list(extensions))
+    if version_tuple(c.get("contract_version")) >= (1, 2):
+        # v1.2+: kho cá thể + độ tươi. Adapter kho và sim đọc `tuning["freshness"]` (ADR-0001).
+        validate_freshness(c.get("freshness"))
+        c["tuning"]["freshness"] = dict(c["freshness"])
+    if "current" in extensions:
+        validate_current(c["tuning"]["gather"].get("current"), c["tuning"]["gather"])
     return c
+
+
+def version_tuple(v):
+    if not isinstance(v, str):
+        raise BadInput("contract_version phải là chuỗi dạng '1.2'")
+    try:
+        return tuple(int(p) for p in v.split("."))
+    except ValueError:
+        raise BadInput(f"contract_version không hợp lệ: {v!r}")
+
+
+def validate_freshness(f):
+    if not isinstance(f, dict) or set(f) != {"initial", "gather_decay_per_s", "quan_decay_per_s", "spoiled_below"}:
+        raise BadInput("contract v1.2 cần freshness {initial, gather_decay_per_s, quan_decay_per_s, spoiled_below}")
+    _between("freshness.initial", f["initial"], 1, 100)
+    _between("freshness.gather_decay_per_s", f["gather_decay_per_s"], 0, 100)
+    _between("freshness.quan_decay_per_s", f["quan_decay_per_s"], 0, 100)
+    _between("freshness.spoiled_below", f["spoiled_below"], 0, f["initial"])
+
+
+def validate_current(cur, g):
+    keys = {"interval_ticks", "duration_ticks", "warning_ticks", "min_depth", "speed"}
+    if not isinstance(cur, dict) or set(cur) != keys:
+        raise BadInput(f"extension current cần tuning.gather.current có đúng khóa {sorted(keys)}")
+    _int_between("gather.current.interval_ticks", cur["interval_ticks"], 2, 1_000_000)
+    _int_between("gather.current.duration_ticks", cur["duration_ticks"], 1, cur["interval_ticks"] - 1)
+    _int_between("gather.current.warning_ticks", cur["warning_ticks"], 0, cur["interval_ticks"] - 1)
+    _between("gather.current.min_depth", cur["min_depth"], 0, g["bounds"]["d"][1])
+    _between("gather.current.speed", cur["speed"], 0, 20)
 
 
 def _int_between(name, v, lo, hi):

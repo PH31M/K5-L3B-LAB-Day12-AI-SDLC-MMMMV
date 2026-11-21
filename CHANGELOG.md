@@ -17,17 +17,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Phím `C` và nút `👁️ Tương phản` bật giao diện tương phản cao hỗ trợ người dùng khiếm thị màu.
   - Cờ `?hc=1` trên URL khởi động trực tiếp chế độ tương phản.
 
-## [1.2.0] - Phase 3 (Mùa Nước Nổi)
+## [1.2.0] - Phase 3 (Mùa Nước Nổi — Contract v1.2)
+
+> Ghi chú: mục này trước đây đã ghi "chuyển kho sang cá thể" khi code chưa làm. Luật v1.2 chỉ thật sự bật ở
+> commit tích hợp Phase 3 (manifest có khối `freshness`). Manifest hiện ghi `"1.3"`, gồm toàn bộ luật v1.2
+> (spec Phase 4: v1.3 chỉ thêm lệnh) — xem `docs/clarify.md` Q14.
+
+### ⚠ Breaking change — kho đếm → kho cá thể
+- **File kho** (`--inventory`, `--inventory-out`, `gather_end.data.inventory`):
+  `{"items":{"ca_loc":1}}` → `{"items":[{"id":"I1","kind":"ca_loc","fresh":100}]}`. Kho rỗng là `{"items":[]}`.
+  Xuất theo id, `fresh` đủ chính xác để đọc lại đúng giá trị và nhánh ở ngưỡng 30.
+- **Adapter hai schema** (`chonoi/inventory.py`, ADR-0001): manifest có `freshness` ⇒ chỉ nhận kho cá thể;
+  file kho đếm, id trùng/rỗng, kind lạ, `fresh` ngoài [0, 100] hoặc không hữu hạn → **mã 2**. Manifest v1.1
+  (không có `freshness`) vẫn đọc/ghi kho đếm như cũ.
+- **Scenario:** `gather.hold` và `quan.stock` là mảng cá thể; `customers[].reserved` là **mảng id**.
+- **JSONL:** snapshot `hold`, `stock` (quán + Shop), `customers[].reserved` theo schema mới;
+  `cook_started.data.items` là mảng cá thể sắp theo kind rồi id; `lost` trong `monster_hit`/`faint` là mảng cá thể
+  theo thứ tự bỏ LIFO. Payload `gather`/`fish_caught` **không đổi** so với v1.1.
+- **Giá:** `cook_started.base_price = floor(giá niêm yết × trung bình fresh của các id dùng / 100)`; boa tính trên giá đã chốt.
+
 ### Added
-- **Kho cá thể (Individual Items):** Chuyển đổi định dạng kho sang mảng cá thể `{id, kind, fresh}`.
-- **Độ tươi & Hàng ươn (Freshness & Spoiled):**
-  - Độ tươi `fresh` giảm theo thời gian; cá thể có `fresh < 30` bị coi là ươn, không thể dùng để nấu.
-  - Sự kiện `spoiled` phát ra khi cá thể vượt ngưỡng ươn.
-- **HUD v1.2 (Ticket 05):**
-  - Hiển thị thanh độ tươi mini trên từng ô giỏ hàng.
-  - Gạch chéo đỏ và nhãn `ƯƠN` cho cá thể ươn.
-  - Banner toast thông báo cá thể ươn (chỉ hiện đúng 1 lần cho mỗi cá thể).
-  - Cờ `?fx=0` trên URL để tắt hiệu ứng hạt và sóng nước trên máy yếu.
+- **Manifest:** khối `freshness {initial:100, gather_decay_per_s:0.5, quan_decay_per_s:0.25, spoiled_below:30}` (kiểm dải).
+- **Độ tươi chính xác** (`chonoi/sim/freshness.py`): 1 điểm = 240 units; giỏ hao 2 units/tick, kho quán 1 unit/tick,
+  kẹp đáy 0, pause dừng hao, món chín và hàng ở Shop không hao. Hàng mới `fresh = 100`, hao từ bước sau.
+- **Event `spoiled {item_id, kind, location: hold|stock}`** đúng một lần khi đi từ ≥ 30 xuống < 30, theo id.
+  Hàng ươn vẫn chiếm ô, không dùng nấu, không được giữ chỗ.
+- **Quán giữ theo id** (`chonoi/sim/quan_stock.py`): mỗi loại lấy cá thể khả dụng tươi nhất, hòa theo id; phần giữ
+  vừa ươn → nhả toàn bộ, thử giữ lại đúng một lần (theo `order_tick` rồi id bàn); không đủ → `unfulfillable`.
+- **Thứ tự tick:** gather — đồng hồ/cooldown/hồi nút → hao tươi → lịch dòng lũ → bơi…; quán — đồng hồ → hao tươi kho
+  + `spoiled` → giữ lại đơn bị ảnh hưởng → bếp → di chuyển/tương tác → thanh toán/kiên nhẫn/đóng ca → khách mới.
+- **day:** bàn giao trong cùng tick chuyển pha, không hao thêm, giữ id và units chính xác; Ngày đầu giữ id của mẫu
+  `gather.hold`, các Ngày kế cấp id mới theo thứ tự mảng với kind/fresh ban đầu; id `I…` tăng xuyên pha và Ngày.
+- **Mở rộng `current` (dòng nước lũ):** `extensions: ["net", "current"]`, `gather.current {1800, 480, 120, 10, 1.5}`.
+  Event `current_warning {starts_at_phase_tick}` (t−120), `current_start {direction, duration_ticks}` (trước di chuyển
+  ở t), `current_end {direction, reason: elapsed|phase_end}`; lực 1.5 m/s khi d đầu bước ≥ 10, không tích lũy vào
+  `player.vel`; snapshot `current: null | {direction, ticks_left}`. Scenario `random_current:false`, `current_direction:-1|1`.
+- **Test:** `tests/test_freshness_v12.py` (18 ca hộp đen: ngưỡng 30, thứ tự id, bàn giao hai tiến trình, ngưỡng sau
+  bàn giao, kho rỗng khi ngất, mã 2, giữ lại khi ươn, `unfulfillable`, giá `floor`, pause, Ngày 2, dòng lũ).
+
+### Cách cập nhật fixture (v1.1 → v1.2)
+```jsonc
+// gather.hold
+["ca_loc", "bong_sung"]                       →  [{"id":"I1","kind":"ca_loc","fresh":100},{"id":"I2","kind":"bong_sung","fresh":100}]
+// quan.stock
+{"ca_loc": 2}                                 →  [{"id":"I1","kind":"ca_loc","fresh":100},{"id":"I2","kind":"ca_loc","fresh":100}]
+// customers[].reserved
+{"ca_loc": 1}                                 →  ["I1"]     // bỏ trống thì sim tự giữ tươi nhất theo order_tick rồi id bàn
+// đơn assigned / served / unfulfillable
+"reserved": {}                                →  "reserved": []
+```
+- Id phải duy nhất giữa các nơi chứa; muốn kiểm nhánh ươn thì đặt `fresh: 30` (ươn ở bước đầu).
+- So độ tươi với dung sai ±0.01 (JSONL làm tròn 3 chữ số; file kho giữ đủ chính xác). Kiểm nhánh ngưỡng bằng event/trạng thái.
+- Test cũ đổi vì luật mới: `docs/verification/phase-3.md` mục "Test phải sửa — lý do".
+
+### Điều kiện bật v1.2 (ADR-0001) — đã đạt
+Gather và quán cùng dùng kho cá thể; test migration xanh (kho đếm → mã 2); smoke hai tiến trình xanh trên schema mới
+(`docs/proof/phase-3/do-tuoi/smoke-p3.txt`).
+
+### HUD v1.2 (Ticket 05, client `chonoi/web/index.html`)
+- Giỏ: số lượng theo loại kèm **độ tươi thấp nhất (%)** tô màu xanh ≥ 60 / vàng ≥ 40 / đỏ; nhãn `⚠ n ƯƠN (chiếm ô)`.
+- Kho quán: kho khả dụng (tồn chưa ươn − phần giữ theo id) kèm % tươi thấp nhất và `⚠ n ươn`; bảng phấn đọc
+  `reserved` là mảng id.
+- Bắt đầu nấu: chữ nổi `Tươi x% → giá` tại bếp (giá đã chốt theo độ tươi).
+- Toast + âm thanh cho `spoiled` (một lần mỗi cá thể, ghi giỏ/kho); dòng lũ: báo trước (chữ + 🌊 + âm), băng
+  `NƯỚC XIẾT ← / →` khi đang chảy, báo khi dịu. Đọc được ở tương phản cao (`C`) và `?fx=0`.
+- Bằng chứng ảnh: `docs/proof/phase-3/do-tuoi/`.
 
 ## [1.1.0] - Phase 2 (Một Ngày Ở Chợ Nổi — Contract v1.1)
 ### Added

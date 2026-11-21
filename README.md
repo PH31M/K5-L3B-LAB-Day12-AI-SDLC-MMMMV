@@ -74,9 +74,13 @@ python3 -m chonoi.live --mode gather
 
 - **Đồ họa 2D làng quê Nam Bộ** (chỉ ở client trình duyệt, headless không đổi): ca sáng là mặt cắt sông với trời bình minh, núi xa có sương, ruộng lúa, lũy tre, nhà tranh/nhà ngói, bến Má Tư; nước chia tầng nông–giữa–sâu theo màu phù sa. Cá lóc, đàn cá linh, cặp cá kèo và Cá Sấu Năm Chèo có hình riêng; bông súng, điên điển, kèo nèo khác nhau và hiện vòng mọc lại. Ca tối là quán nhà bè mái ngói, gạch tàu, dây đèn vàng trên sông đêm; bảng phấn cho biết món nào đủ nguyên liệu và đơn nào bếp sẽ nấu kế tiếp. Cuối ngày là ghe hàng có cây bẹo bán nâng cấp. Mọi hình vẽ thủ tục, 0 KB ảnh (xem `CREDITS.md`).
 - **Lặn/nổi nhanh khi chơi trên trình duyệt:** `chonoi.live` nhân tốc độ trục dọc ở ca sáng ×1.75 (≈ 7 m/s; ngang giữ 4 m/s). Đổi bằng `--dive-speed-mult N` (`1` = đúng contract). Headless, JSONL và test không bị ảnh hưởng vì manifest không có khóa `live_vertical_speed_mult`.
+- **Mở rộng Phase 3 — dòng nước lũ (`current`, khai trong `extensions`):** mỗi 30 s nước xiết 8 s đẩy Út Sen 1.5 m/s
+  khi ở độ sâu ≥ 10 m; báo trước 2 s bằng chữ + 🌊 + âm thanh. Test: `tests/test_freshness_v12.py` (lớp `Current`),
+  `tests/test_gather_extensions.py`; bằng chứng: `docs/proof/phase-3/do-tuoi/` (đo lực trên trình duyệt). Headless tắt
+  bằng `"random_current": false` trong scenario.
 - **HUD theo pha:** cảnh, trục phím và HUD chọn theo `snapshot.phase`; kho khả dụng = tồn trừ phần khách giữ; ba cảnh báo (Thủy quái, Hết hơi, Khách sắp giận) có chữ + biểu tượng, đọc được ở tương phản cao và `?fx=0`. Bằng chứng: `docs/proof/phase-4/do-hoa-2d/`.
 **Headless:** `python3 -m chonoi.headless --mode gather --seed 1 --ticks 600 --out out.jsonl`
 **Tính điểm:** `score = earned + 100 × floor(reputation)`.
-**Chơi trọn hai buổi:** `--mode gather --inventory-out kho.json`, rồi `--mode quan --inventory kho.json`.
+**Chơi trọn hai buổi:** `--mode gather --inventory-out kho.json`, rồi `--mode quan --inventory kho.json` (kho v1.2: mảng cá thể `{id, kind, fresh}` — file kho đếm cũ trả mã 2, xem `CHANGELOG.md`).
 
 Bằng chứng kiểm chứng: `python3 tools/run_checks.py` · ma trận: `docs/verification/phase-1.md` · kế hoạch: `docs/plan/`.
