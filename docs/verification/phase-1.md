@@ -27,3 +27,22 @@ Bằng chứng thô: `docs/proof/phase-1/`. Trạng thái ghi **trung thực t�
 - **Đạt:** các cổng hợp đồng đã có sẵn từ starter (cập bến, hết giờ, chặn biên, xuất kho, tất định khung).
 - **Chưa đạt:** toàn bộ luật gather (oxy/ngạt/ngất/hái/bắt) và luật quán — đúng như ticket 02–05.
 - **Điều cần chỉnh cho phase sau:** khi 01 xong, viết ngay 4 test quán (AC-12..14) để QA không chờ; trước khi tag phải chạy lại `tools/run_checks.py` và cập nhật cột Kết quả.
+
+## Cập nhật sau PR #1 (`a749b76`, merge `9342f9e`)
+
+Commit của Cao Minh làm xanh 3/8 test đỏ: oxy, `oxygen_empty`, `choke` đúng `t+59` (case ngập từ đầu),
+`dive`/`surface`, không ngạt khi nổi lên. Còn **5 đỏ**:
+
+| Test | Trạng thái | Ghi chú |
+|---|---|---|
+| `choke_lan_dau_o_t_plus_59` | ✅ | choke ở 1859 |
+| `oxy_duoi_nuoc_ve_0_dung_tick_1800` | ✅ | |
+| `noi_len_dung_tick_dang_le_ngat_thi_khong_ngat` | ✅ | |
+| `faint_bo_gio_lifo_va_kho_rong` | ❌ | `choke` ở tick **60** thay vì 59 khi scenario bắt đầu với oxy = 0. PRD nói "t+59"; cần chốt với Anh Năm: mốc `t` là tick chạm 0 trong lượt, hay trạng thái sẵn có ở tick 0? |
+| `hai_nut_hoa_khoang_cach_thi_theo_id_key` | ❌ | lát 2 (Nhật Minh) |
+| `gio_day_thi_hold_full_khong_dat_regrow` | ❌ | lát 2 |
+| `moc_lai_sau_1200_tick` | ❌ | lát 2 |
+| `bat_ca_xoa_dan_va_hoi_chieu_30_tick` | ❌ | lát 2 |
+
+Cổng tích hợp và tất định: **PASS** (`tools/run_checks.py`). Fixture quán đầy đủ (`customers`/`hand`/`stoves`) đã nạp được
+sau commit prefactor; 4 test quán vẫn `skip` vì luật quán chưa có.
