@@ -77,3 +77,17 @@ có bàn trống mà hết món thì `no_dish`. Mới 3/5 test quán xanh; 2 tes
 | AC-HUD-02 HUD tối: kho, khách + kiên nhẫn, bếp + timer, tay, tiền, uy tín | chơi thử live quan | nt | đạt |
 | AC-HUD-03 Màn kết thúc có lý do + điểm + chơi lại | hết giờ / cập bến / ngạt | nt | đạt |
 | AC-HUD-04 Null-safety khi thiếu trường, headless không đổi byte | chạy headless so byte | `docs/proof/phase-1/checks-latest.md` | đạt |
+
+## Cập nhật sau tích hợp 4 nhánh (`integ/phase1`)
+
+Đã gộp: `main` + `feat/duc-minh` (service 447 dòng + test) + `feat/quang-vinh` (HUD 1028 dòng) + `feat/van-minh` (khách, test, tool).
+
+| Cổng | Kết quả |
+|---|---|
+| unittest (unit + hộp đen) | **94 test OK**, 0 skip |
+| smoke `gather → kho → quan` | PASS (35823 byte) |
+| tất định cùng seed | PASS (byte giống nhau) |
+
+**Trạng thái AC:** AC-01…AC-11 đạt · AC-12 (khách/giữ chỗ/kiên nhẫn/`no_dish`) đạt · AC-13 (nấu/bưng/phục vụ/boa) đạt ·
+AC-14 (đóng ca, `quan_end` một lần) đạt sau khi sửa lỗi phát trùng · AC-15/16 đạt.
+**Kết luận:** Phase 1 đủ điều kiện tag trên bản tích hợp; còn chờ merge vào `main` qua PR.
