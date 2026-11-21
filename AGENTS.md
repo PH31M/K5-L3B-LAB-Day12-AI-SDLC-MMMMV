@@ -1,43 +1,34 @@
-# AGENTS.md — hướng dẫn chung cho mọi agent AI của nhóm
+# AGENTS.md
 
-> Cập nhật qua các phase (P1: Khởi tạo · P2: Âm thanh & VFX · P3: Kho cá thể & Độ tươi). Ngắn gọn, có lệnh chạy thật.
+Lab Day 12 — Quán Ăn Chợ Nổi. Python thuần (stdlib), contract **v1.1**, `phase-1` đã tag.
+
+## Trước khi viết
+
+- Đọc spec của phase (`docs/specs/phase-<n>.md`) và ticket của lát mình (`docs/tickets/phase-<n>/`).
+- Số liệu đọc từ `game.contract.json`. Ngẫu nhiên qua `Streams`. Danh sách thực thể sắp bằng `sort_by_id`.
+- Sửa file của mình; file chia sẻ (`chonoi/contract.py`, `chonoi/scenario.py`, `chonoi/runner.py`) thì báo Integrator trước.
+
+## Trước khi commit
+
+- `python3 tools/run_checks.py` phải PASS: unittest, smoke hai tiến trình, tất định byte, bằng chứng.
+- Test đổi vì luật đổi thì ghi lý do trong commit.
+- Kết quả chạy ghi vào mô tả commit hoặc `docs/proof/phase-<n>/`.
+
+## Khi cần tra
+
+- Hợp đồng kho, tên event, giao diện sim↔UI: `docs/contracts/README.md`.
+- PRD chỗ mơ hồ: `docs/clarify.md` trước, hỏi PO sau.
+- Luật chơi: `chonoi/sim/` (gather, quan, quan_customers, quan_service, monsters, day, fish, shop).
+- Trạng thái từng AC: `docs/verification/phase-<n>.md`. Claim "đạt" phải có file thật trong `docs/proof/`.
 
 ## Lệnh
-- Test: `PYTHONPATH=tests:. python3 -m unittest discover -s tests -v`
-- Headless: `python3 -m chonoi.headless --mode gather|quan --seed 1 --ticks 600 --out out.jsonl`
-- Headless (chế độ Ngày P2): `python3 -m chonoi.headless --mode day --seed 1 --days 1 --out day.jsonl`
-- Cổng kiểm 1 lệnh: `python3 tools/run_checks.py`
-- Kiểm tra tiến độ nhóm: `python3 tools/team_progress.py`
-- Chơi thử trên trình duyệt: `python3 -m chonoi.live --mode gather|quan` (mở địa chỉ in ra; WASD, E, Space, R, M bật/tắt âm thanh)
-- Kiểm tra hiệu năng máy yếu: `http://127.0.0.1:<port>/?fx=0` (tắt hiệu ứng hạt và sóng nước)
 
-## Cấu trúc & quy ước
-- (Starter Python là TÙY CHỌN; nhóm có thể dùng ngôn ngữ khác nếu giữ Test Contract.) Khung do giảng viên cấp: `chonoi/{headless,inputs,scenario,contract,rng,ids,jsonl,inventory,runner,live}.py` và `chonoi/web/`. Hạn chế sửa; nếu phải sửa thì báo cả nhóm và ghi lại lý do.
-- Luật chơi của nhóm: `chonoi/sim/gather.py`, `chonoi/sim/quan.py`, `chonoi/sim/quan_service.py`, `chonoi/sim/quan_customers.py`, `chonoi/sim/monsters.py`, `chonoi/sim/day.py`.
-- **Số liệu chỉ đọc từ `game.contract.json` / dữ liệu**, không hard-code trong luật.
-- Mọi số ngẫu nhiên đi qua `Streams` (`chonoi/rng.py`); không dùng `random` toàn cục, không dùng đồng hồ hệ thống.
-- Sắp danh sách thực thể bằng `ids.sort_by_id`; cấp id bằng `IdAllocator`.
-- **Client Web UI (`chonoi/web/index.html`):** Chỉ đọc snapshot từ `/state`, không can thiệp logic backend, an toàn `null-safe` khi server thiếu trường.
+- Test: `PYTHONPATH=tests:. python3 -m unittest discover -s tests`
+- Chơi: `python3 -m chonoi.live --mode gather|quan|day` (WASD, E, Space, R, C tương phản, `?fx=0` tắt hiệu ứng)
+- Headless: `python3 -m chonoi.headless --mode day --days 2 --seed 7 --out day.jsonl`
+- Cổng kiểm: `python3 tools/run_checks.py` · Tiến độ nhánh: `python3 tools/team_progress.py`
+- Bench: `python3 tools/bench.py --seed 42 --duration 30 --out bench.json` (cần Playwright hoặc obscura)
 
-## Điểm nhấn Phase 2 (Contract v1.1)
-- Lặn sáng: 8 đàn cá ban đầu, 3 loài cá (`ca_loc`, `ca_linh`, `ca_keo`). Quái vật Cá Sấu tuần tra/truy đuổi ở độ sâu $d \ge 10$, tấn công mất 1 Máu và rơi nửa giỏ LIFO.
-- Mở quán tối: 2 bếp nấu song song (`B1`, `B2`), 4 bàn ăn (`T1`–`T4`), thực đơn 6 món.
-- Chế độ Ngày (`mode == "day"`): Lọc món theo `day_plan.dishes` trước khi xét kho khả dụng. Không đặt trần bán theo số suất kế hoạch.
+## Skill
 
-## Nên tránh
-- Không sửa `docs/contracts/`, `game.contract.json` (khóa contract) hoặc schema kho khi chưa báo cả nhóm (đổi hợp đồng ảnh hưởng mọi module).
-- Không làm hỏng nhánh chính: trước khi đẩy, chạy test toàn bộ.
-- Không bịa yêu cầu: chỗ mơ hồ thì ghi `docs/clarify.md` và hỏi PO.
-- Không sửa test cho xanh khi luật sai; phải sửa luật hoặc ghi lý do đổi test trong commit.
-- Không nạp tệp âm thanh/đồ họa ngoài nặng vào repo; âm thanh và VFX ưu tiên tự sinh bằng Web Audio API và Canvas particles.
-
-## Quy tắc làm việc với agent
-- Mỗi agent một việc rõ ràng (một lát). Cho agent đọc PRD/ticket đúng phase và hợp đồng kho trước.
-- Agent làm xong phải chạy test và ghi kết quả vào mô tả commit hoặc `docs/proof/`; người đọc lại thay đổi trước khi đẩy.
-- Sáng tạo thêm được khuyến khích nhưng phải tắt ở headless (xem README, mục "Tự do sáng tạo").
-
-## Skills của nhóm (tại `.agents/skills/`)
-1. **`phase-gate`** (`.agents/skills/phase-gate/SKILL.md`): Cổng kiểm tra toàn diện tự động trước khi gắn tag `phase-n` (kiểm tra test, smoke, tính tất định).
-2. **`headless-probe`** (`.agents/skills/headless-probe/SKILL.md`): Dựng ca kiểm thử bằng scenario + inputs, phân tích JSONL để chứng minh luật chạy đúng chuẩn headless.
-3. **`check-headless`** (`.agents/skills/check-headless/SKILL.md`): Lệnh kiểm tra nhanh tính tất định (cùng seed $\rightarrow$ cùng byte) và chuỗi chuyển giao file kho `gather -> kho -> quan`.
-4. **`ui-verify`** (`.agents/skills/ui-verify/SKILL.md`): Quy trình kiểm tra toàn diện giao diện người dùng trực tiếp (Live UI/HUD), âm thanh procedural Web Audio và cờ `?fx=0`.
+`.agents/skills/phase-gate/` (cổng + tag) · `.agents/skills/headless-probe/` (dựng ca kiểm bằng scenario + inputs).
