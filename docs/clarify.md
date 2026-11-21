@@ -18,5 +18,14 @@ Nguồn trả lời ưu tiên: **Anh Năm hàng xóm** (trợ giảng AI ở tab
 - Ticket 03 triển khai theo **giả định Q1 hiện có**: bắt hụt vì giỏ thiếu chỗ giữ đàn, không đặt hồi chiêu mới. Test ghi rõ hành vi này; chưa có câu trả lời của trợ giảng để đóng Q1.
 - Q2–Q8 vẫn là giả định, chưa có bằng chứng xác nhận. Cần đưa nguyên văn câu hỏi ở bảng trên cho Anh Năm/giảng viên và ghi nguồn trả lời trước khi đổi luật/contract.
 - Phân công hiện hành lấy từ `TEAM.md`, `docs/plan/phase-1.md` và `docs/tickets/phase-1/README.md`: Nhật Minh làm ticket 03 + PO. Bảng trong conformance/team-split có phần dự kiến cũ; không tự nhận thêm luật quán của thành viên khác.
-- Repo chỉ có yêu cầu Phase 1. Phase 2–4 cần nội dung board được công bố rồi mới lập ticket và triển khai; không tự suy đoán phần mở rộng.
+- Tại thời điểm làm P1 chỉ có yêu cầu P1 trong nhánh cá nhân. Nay đã đọc spec/ticket P2–P3 từ object `phase-1`/dependency v1.1; phần phân công mới theo README từng phase thay cho dự kiến trong team-split.
 - Đã xác minh core ticket 02 vào repo chung qua PR #1, commit `9342f9e`. Core này và helper ticket 03 đã được ghép trong bản làm việc `feat/nhat-minh`, 62/62 test qua, gồm ca ngất/kho rỗng. [Bằng chứng lát 2](proof/phase-1/nhat-minh.md). Chưa có review của người cho phần Nhật Minh.
+
+## Bàn giao PO — Phase 2–3
+
+- Phân công xác nhận: P2 ticket 02 (cá) + 07 (net); P3 ticket 02 (độ tươi) + 07 (current). Không tự nhận phần quán, shop/day, contract hoặc adapter của thành viên khác.
+- Dependency kiểm được: `c84eac9` (v1.1 prefactor), `6187354` (thêm Cá Sấu). Adapter `Stock` v1.2 chưa có trong các nguồn đã kiểm; cần owner cung cấp API/commit trước khi ghép kho, không coi component probe là bằng chứng migration.
+- Quy ước kỹ thuật đề xuất cho net: mỗi cấp dùng `{level, price, radius, max_schools}`; đã chuẩn bị patch data đúng hai cấp của ticket. Integrator cần review tên trường và truyền `extensions` + `active_upgrades` vào gather.
+- Tính tuổi trong giỏ dùng đơn vị nguyên theo ADR-0001; giao diện handoff xuất `{id, kind, fresh}`, không làm tròn trước so ngưỡng. Chưa xác nhận `Stock.add/take/items` cụ thể; cần ghép lớp này sau khi owner bàn giao.
+- Current chỉ phát các event ticket đã định nghĩa: `current_warning` và `current_end`. Không tự thêm event bắt đầu. Validator cần nhận `random_current`/`current_direction`; lịch, hướng và lực đẩy đã kiểm ở lớp sim.
+- Bằng chứng: [Phase 2](proof/phase-2/nhat-minh.md), [Phase 3](proof/phase-3/nhat-minh.md).

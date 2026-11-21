@@ -16,7 +16,8 @@ class GatherActions(unittest.TestCase):
 
     def run_gather(self, block, inputs=(), ticks=1, existing_inventory=None):
         with Workdir() as w:
-            scenario = {"player": {"pos": [50, 0]}, "nodes": [], "fish": [], **block}
+            # Các test tương tác P1 cần cá đứng yên khi dùng lại ở contract v1.1.
+            scenario = {"player": {"pos": [50, 0]}, "nodes": [], "fish": [], "random_fish": False, **block}
             sc = write_json(w.path("scenario.json"), {"gather": scenario})
             inp = write_json(w.path("inputs.json"), frames(*inputs))
             inv = w.path("inventory.json")
