@@ -60,3 +60,11 @@ sau commit prefactor; 4 test quán vẫn `skip` vì luật quán chưa có.
 
 Ghi chú: hai chỗ PRD mơ hồ đã chốt tạm và ghi vào `docs/clarify.md` (Q9 ngạt khi fixture đặt sẵn oxy 0 → 60;
 Q10 nút mọc lại ở `tick_hái + 1200`). Nếu Anh Năm trả lời khác thì sửa test + luật, không sửa bằng chứng.
+
+## Cập nhật sau lát 3 (`quan_customers`)
+
+Quán đã có khách: đến theo `phase_tick` (120, 1020, …), chọn đều theo seed trong món đủ nguyên liệu khả dụng
+(tồn − giữ chỗ), giữ đúng công thức ngay khi gọi, kiên nhẫn giảm từ bước sau, hết kiên nhẫn thì rời và uy tín −0.5,
+có bàn trống mà hết món thì `no_dish`. Mới 3/5 test quán xanh; 2 test bếp/phục vụ vẫn `skip` (ticket 05 của Đức Minh).
+
+`AC-12` (khách/giữ chỗ/kiên nhẫn/no_dish) → **đạt**. `AC-13`, `AC-14` (nấu/bưng/phục vụ/tiền, đóng ca) → chưa.
