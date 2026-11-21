@@ -12,6 +12,8 @@ Nguồn trả lời ưu tiên: **Anh Năm hàng xóm** (trợ giảng AI ở tab
 | Q6 | | Khách ăn xong và khách mới đến cùng một tick: thứ tự event? | Giả định: trả tiền/rời trước, sinh khách sau | PO |
 | Q7 | | `phase_tick` khi `time_left_ticks` bị rút ngắn vẫn bắt đầu 0? | Giả định: đúng | PO |
 | Q8 | | `invuln_ticks` (starter có, PRD mục D không có) — bỏ khỏi scenario/snapshot? | Giả định: bỏ khỏi scenario; snapshot có thể giữ để không vỡ client | Integrator |
+| Q9 | | Scenario đặt sẵn `oxygen_ticks = 0`, `zero_oxy_ticks = 0`: ngạt đầu ở tick 59 hay 60? | Giả định: **60** — bước đầu tiên có oxy 0 là t = 1 nên ngạt ở t+59; ca ngập từ oxy đầy vẫn là 1859 | QA |
+| Q10 | | `regrow_ticks = 1200` đặt ở tick hái (event tick) — nút mọc lại ở `tick_hái + 1200`? | Giả định: đúng, test tính theo `event.gather.tick + 1200` | QA |
 
 ## Bàn giao PO — Nhật Minh, Phase 1 (2026-11-21)
 

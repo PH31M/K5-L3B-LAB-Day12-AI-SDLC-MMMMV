@@ -16,3 +16,6 @@ mỗi người mở issue mới, dán nguyên nội dung file tương ứng, g�
 | 07 | Verification pack | None (xanh sau 02–05) | Văn Minh |
 
 Làm theo frontier: 01, 06, 07 mở ngay; xong 01 thì 02–05 mở cùng lúc.
+
+**Nhịp tích hợp:** PR đợt 1 lúc **0:25**, đợt 2 lúc **0:40**, đợt 3 lúc **0:50** — không đợi tới cuối phase.
+Merge theo thứ tự 01 → 02 → 03 → 04 → 05 → 06 sau mỗi đợt chạy lại toàn bộ test trên `main`.
