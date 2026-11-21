@@ -79,7 +79,9 @@ class Choke(Base):
             self.assertEqual(code, 0, err)
             rows = read_jsonl(w.path("o.jsonl"))
             names = [(e["tick"], e["name"]) for e in events(rows)]
-            self.assertIn((59, "faint"), names, names)
+            # Scenario đặt sẵn oxy = 0 ⇒ bước đầu tiên có oxy 0 là t = 1, nên ngạt đầu ở t+59 = 60.
+            # (Ca ngập từ oxy đầy: chạm 0 ở t = 1800 ⇒ ngạt ở 1859 — xem test_choke_lan_dau_o_t_plus_59.)
+            self.assertIn((60, "faint"), names, names)
             faint = events(rows, "faint")[0]["data"]
             self.assertEqual(faint["cause"], "choke")
             self.assertEqual(faint["hp"], 0)
@@ -135,9 +137,10 @@ class Harvest(Base):
                          "nodes": [{"id": "N1", "kind": "bong_dien_dien", "pos": [12, 0]}]}}
         with Workdir() as w:
             rows = self.run_gather(w, sc, [{"tick": 0, "interact": True}], ticks=1250, every="1")
-            self.assertEqual(self.snaps(rows)[0]["nodes"][0]["regrow_ticks"], 1200)
+            harvest_tick = events(rows, "gather")[0]["tick"]
+            self.assertEqual(self.snaps(rows)[harvest_tick]["nodes"][0]["regrow_ticks"], 1200)
             regrow = events(rows, "node_regrown")
-            self.assertEqual([e["tick"] for e in regrow], [1200])
+            self.assertEqual([e["tick"] for e in regrow], [harvest_tick + 1200])
 
 
 class Catch(Base):

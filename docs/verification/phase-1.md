@@ -46,3 +46,17 @@ Commit của Cao Minh làm xanh 3/8 test đỏ: oxy, `oxygen_empty`, `choke` đ�
 
 Cổng tích hợp và tất định: **PASS** (`tools/run_checks.py`). Fixture quán đầy đủ (`customers`/`hand`/`stoves`) đã nạp được
 sau commit prefactor; 4 test quán vẫn `skip` vì luật quán chưa có.
+
+## Cập nhật sau lát 2 (`gather_actions`)
+
+`tools/run_checks.py` → **PASS**. 53 test (49 chạy + 4 skip), 0 đỏ.
+
+| Nhóm AC | Kết quả |
+|---|---|
+| AC-01..AC-11 (oxy, ngạt, ngất, hái, mọc lại, bắt cá, cập bến, hết giờ) | ✅ đạt |
+| AC-15 smoke hai tiến trình | ✅ đạt (35823 byte, kho đúng) |
+| AC-16 tất định cùng seed | ✅ đạt |
+| AC-12..AC-14 (khách, nấu/phục vụ, đóng ca) | ⏳ 4 test đang `skip`, chờ luật quán |
+
+Ghi chú: hai chỗ PRD mơ hồ đã chốt tạm và ghi vào `docs/clarify.md` (Q9 ngạt khi fixture đặt sẵn oxy 0 → 60;
+Q10 nút mọc lại ở `tick_hái + 1200`). Nếu Anh Năm trả lời khác thì sửa test + luật, không sửa bằng chứng.
