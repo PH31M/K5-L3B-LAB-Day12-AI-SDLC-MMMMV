@@ -38,3 +38,15 @@ Cá bơi/sinh (02), Cá Sấu (03), quán 2 bếp/4 bàn/6 món (04), `day` + Sh
 | Không hit khi người chơi ở mặt nước | `test_khong_hit_khi_nguoi_choi_o_mat_nuoc` | đạt |
 | Máu 0 do quái: `faint {cause:"monster"}`, `gather_end` fainted, kho rỗng | `test_ngat_do_quai_kho_rong_va_gather_end` | đạt |
 | Scenario `monsters[]` thay danh sách mặc định | `test_scenario_thay_danh_sach_quai` | đạt |
+
+## Ticket 04 — Quán Ăn mở rộng (xong)
+
+| AC | Cách kiểm | Kết quả |
+|---|---|---|
+| Hai bếp B1 [2,8], B2 [5,8] nấu song song độc lập, không giẫm đơn nhau | `test_quan_p2.TestQuanP2.test_two_stoves_cook_parallel_without_collision` | đạt |
+| Bốn bàn T1–T4: kín 4 bàn thì hết chỗ (`free_table` trả về None) | `test_quan_p2.TestQuanP2.test_four_tables_capacity` | đạt |
+| 6 món với 2 nguyên liệu mới (`ca_keo`, `keo_neo`): nấu món lẩu mắm chốt giá 200đ, items sắp alphabet | `test_quan_p2.TestQuanP2.test_six_dishes_and_new_ingredients` | đạt |
+| Trong `day`: lọc menu theo `day_plan.dishes` trước; quán độc lập dùng cả 6 món | `test_quan_p2.TestQuanP2.test_day_plan_filtering` | đạt |
+| Kế hoạch ngày không phải trần bán: khách vẫn gọi được tiếp khi còn nguyên liệu | `test_quan_p2.TestQuanP2.test_day_plan_filtering` | đạt |
+| Có bàn trống nhưng không món nào đủ nguyên liệu -> phát `no_dish` và không sinh khách | `test_quan_p2.TestQuanP2.test_no_dish_when_ingredients_insufficient` | đạt |
+| `random_customers: false` không sinh khách tự động | `test_quan_p2.TestQuanP2.test_random_customers_false` | đạt |
