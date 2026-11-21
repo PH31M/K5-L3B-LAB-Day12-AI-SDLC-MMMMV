@@ -8,6 +8,7 @@ Nhóm viết tiếp (PRD-0 mục F, Quán):
 """
 
 from ..ids import sort_by_id
+from . import quan_customers, quan_service
 from .ramp import ramp_velocity
 
 TICK = 60.0
@@ -32,6 +33,7 @@ class QuanSim:
         self.stock = dict(inventory if inventory is not None else scenario.get("stock", {}))
         self.hand = scenario.get("hand")
         self.time_left_ticks = scenario.get("time_left_ticks", int(round(t["duration_s"] * 60)))
+        self.phase_tick = 0  # bắt đầu 0, tăng mỗi bước; lịch khách tính theo giá trị SAU tăng
         self.reputation = scenario.get("reputation", t["reputation_initial"])
         self.stoves = [dict(s, state=s.get("state", "idle"), dish=s.get("dish"),
                             cook_ticks_left=s.get("cook_ticks_left", 0), ready_ticks=s.get("ready_ticks", 0))
@@ -90,16 +92,29 @@ class QuanSim:
 
     def step(self, inp):
         events = []
+        self.phase_tick += 1
         self.time_left_ticks = max(0, self.time_left_ticks - 1)
-        # TODO(nhóm): giảm kiên nhẫn / nấu / ăn; bếp chín -> ready; xử lý khách theo thứ tự PRD-0 mục F.
+        # 1. đồng hồ: timer nấu/ăn (lát 4) và kiên nhẫn khách (lát 3)
+        quan_service.tick(self, events)
+        quan_customers.tick_patience(self, events)
+        # 2-3. đi lại
         self._move(inp)
-        # TODO(nhóm): tối đa MỘT interact, chọn đối tượng theo (khoảng cách, bếp trước bàn, id).
-        # TODO(nhóm): khách mới theo lịch (first_customer_tick, customer_interval_s), no_dish.
+        # 4. tối đa MỘT interact: bếp/bàn, chọn theo (khoảng cách, bếp trước bàn, id)
+        if inp.pressed("interact"):
+            quan_service.interact_once(self, events)
+        # 5. khách ăn xong trả tiền, 6. khách hết kiên nhẫn bỏ đi
+        quan_service.collect_finished(self, events)
+        quan_customers.leave_if_impatient(self, events)
+        # 7. đóng ca hoặc 8. sinh khách theo lịch
         if self.time_left_ticks <= 0:
+            quan_service.close_shift(self, events)
+            quan_customers.close_shift(self, events)
             self.done = True
             self.reason = "time"
             events.append(("quan_end", {"reason": "time", "money": self.money, "earned": self.earned,
                                         "shift_earned": self.shift_earned, "reputation": self.reputation}))
+        else:
+            quan_customers.spawn_due(self, events)
         return events
 
     def _move(self, inp):

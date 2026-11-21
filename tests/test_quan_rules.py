@@ -36,12 +36,12 @@ class Base(unittest.TestCase):
         return {r["tick"]: r for r in snapshots(rows)}
 
 
-@unittest.skip("chờ ticket 02–05: luật quán chưa có (fixture đã nạp được)")
 class Customers(Base):
     def test_khach_den_tick_120_va_giu_cho(self):
-        """Không scenario: khách đầu đến ở tick 120, ngồi bàn trống id nhỏ nhất, giữ đúng công thức."""
+        """Có kho: khách đầu đến ở tick 120, ngồi bàn trống id nhỏ nhất, giữ đúng công thức."""
+        sc = {"quan": {"stock": {"ca_loc": 1, "bong_sung": 2}}}
         with Workdir() as w:
-            rows = self.run_quan(w, ticks=200, every="1")
+            rows = self.run_quan(w, sc, ticks=200, every="1")
             arrived = events(rows, "customer_arrived")
             self.assertEqual([e["tick"] for e in arrived], [120], [e["tick"] for e in events(rows)])
             data = arrived[0]["data"]
@@ -50,11 +50,19 @@ class Customers(Base):
             guest = [c for c in snap["customers"] if c["id"] == data["order_id"]][0]
             self.assertEqual(guest["order_status"], "reserved")
             self.assertEqual(guest["reserved"], tuning()["menu"][data["dish_id"]]["recipe"])
-            self.assertEqual(snap["stock"], {})  # giữ chỗ không làm đổi tồn vật lý
+            # giữ chỗ không làm đổi tồn vật lý (stock đã bao gồm phần đang giữ)
+            self.assertEqual(snap["stock"], {"ca_loc": 1, "bong_sung": 2})
+
+    def test_het_kho_thi_no_dish(self):
+        """Có bàn trống nhưng không món nào đủ nguyên liệu: phát no_dish, không tạo khách."""
+        with Workdir() as w:
+            rows = self.run_quan(w, ticks=200, every="1")
+            self.assertEqual(events(rows, "customer_arrived"), [])
+            self.assertEqual([e["tick"] for e in events(rows, "no_dish")], [120])
 
     def test_het_kien_nhan_thi_roi_va_mat_uy_tin(self):
         """Khách chờ với kiên nhẫn 60 tick: rời ở tick 60, uy tín 3.0 → 2.5."""
-        sc = {"quan": {"customers": [{"id": "C1", "table_id": "T1", "dish_id": "ca_loc_nuong_trui",
+        sc = {"quan": {"stock": {"ca_loc": 1}, "customers": [{"id": "C1", "table_id": "T1", "dish_id": "ca_loc_nuong_trui",
                                       "patience_ticks_left": 60, "order_status": "reserved",
                                       "reserved": {"ca_loc": 1}}]}}
         with Workdir() as w:
