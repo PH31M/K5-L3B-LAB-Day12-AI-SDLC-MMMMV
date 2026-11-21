@@ -3,3 +3,4 @@
 | Phase | Người | Đã xong | Sắp làm | Vướng gì |
 |---|---|---|---|---|
 | Phase 1 | Tào Quang Vinh | Hoàn thành HUD 2 buổi sáng/tối (Ticket 06), prompt ngữ cảnh, overlay kết thúc, kịch bản demo | Hỗ trợ review PR của Văn Minh, chuẩn bị UX/SFX Phase 2 | Không vướng |
+| Phase 2 | Tào Quang Vinh | Tích hợp hệ thống âm thanh procedural Web Audio (0 KB), hiệu ứng bọt khí/khói bếp, hoàn thiện proof HUD | Sẵn sàng review PR cho Văn Minh, đồng bộ các tính năng mở rộng tiếp theo | Không vướng |
