@@ -30,10 +30,11 @@ class GatherSim:
     mode = "gather"
     phase = "gather"
 
-    def __init__(self, tuning, scenario, streams, ids):
+    def __init__(self, tuning, scenario, streams, ids, day=1):
         t = tuning["gather"]
         self.t = t
         self.tick_hz = tuning["tick_hz"]
+        self.day = day
         self.rng = streams
         self.ids = ids
         p = scenario.get("player", {})

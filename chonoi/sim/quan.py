@@ -24,6 +24,7 @@ class QuanSim:
         self.menu = tuning["menu"]
         self.rng = streams
         self.ids = ids
+        self.random_customers = scenario.get("random_customers", True)
         p = scenario.get("player", {})
         self.pos = list(p.get("pos", t["start_pos"]))
         self.vel = [float(c) for c in p.get("vel", [0.0, 0.0])]
@@ -113,7 +114,7 @@ class QuanSim:
             if not any(name == "quan_end" for name, _ in events):
                 events.append(("quan_end", {"reason": "time", "money": self.money, "earned": self.earned,
                                             "shift_earned": self.shift_earned, "reputation": self.reputation}))
-        else:
+        elif self.random_customers:
             quan_customers.spawn_due(self, events)
         return events
 
