@@ -4,11 +4,11 @@
 
 **Blocked by:** 01–04
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `docs/verification/phase-4.md`: mỗi AC-P4 (bench, soak, cảnh báo, tương phản, clone sạch, release, regression P1–P3) có cách kiểm, link bằng chứng trong `docs/proof/phase-4/`, kết quả đạt/chưa đạt ghi trung thực.
-- [ ] Regression P1–P3 chạy lại trên commit tag; test nào đổi vì luật mới phải ghi lý do.
-- [ ] `docs/retro.md`: **mở đầu bằng rà hành động đã chốt ở retro Phase 2** (đã làm chưa, vì sao), rồi điều tốt / điều tệ / hành động tiếp theo; nêu **một lỗi AI** và cách nhóm phát hiện.
-- [ ] `docs/members/<handle>.md` đủ 5 người (≤ 200 từ), mỗi người dẫn commit/bằng chứng cụ thể.
-- [ ] `docs/ai-usage-log.md` và `docs/clarify.md` cập nhật cho Phase 4.
-- [ ] Kiểm chéo: mỗi mục trong retro phải trỏ tới file/commit có thật trong repo chung.
+- [x] `docs/verification/phase-4.md`: mỗi AC-P4 (bench, soak, cảnh báo, tương phản, clone sạch, release, regression P1–P3) có cách kiểm, link bằng chứng trong `docs/proof/phase-4/`, kết quả đạt/chưa đạt ghi trung thực.
+- [x] Regression P1–P3 chạy lại trên commit tag; test nào đổi vì luật mới phải ghi lý do.
+- [x] `docs/retro.md`: **mở đầu bằng rà hành động đã chốt ở retro Phase 2** (đã làm chưa, vì sao), rồi điều tốt / điều tệ / hành động tiếp theo; nêu **một lỗi AI** và cách nhóm phát hiện.
+- [x] `docs/members/<handle>.md` đủ 5 người (≤ 200 từ), mỗi người dẫn commit/bằng chứng cụ thể.
+- [x] `docs/ai-usage-log.md` và `docs/clarify.md` cập nhật cho Phase 4.
+- [x] Kiểm chéo: mỗi mục trong retro phải trỏ tới file/commit có thật trong repo chung.
