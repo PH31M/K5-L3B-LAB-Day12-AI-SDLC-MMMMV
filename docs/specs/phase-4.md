@@ -71,3 +71,16 @@ release notes, CHANGELOG theo phase, CREDITS/LICENSE rà lại.
 - **Không tag `phase-4` trước khi P2 và P3 xong**: bench sẽ đo cảnh thiếu cá bơi/Cá Sấu/độ tươi, soak không có
   `day` để chạy 10 Ngày — tag sẽ là bằng chứng sai.
 - Máy chấm là Linux; `bench_cmd` phải tự tìm trình duyệt (`CHROME`/`chromium`/`chrome`) và báo mã 2 nếu không có.
+
+## Đo thử trên máy hiện tại (obscura, không GPU)
+
+| Cảnh | avg_fps |
+|---|---|
+| Trang trống (chỉ rAF) | 57,5 |
+| Canvas 1280×720, **một** `fillRect`/khung | 21,5 |
+| Trang game (cảnh sáng lõi) | **6,2** |
+| Trang game, `?fx=0` | 6,7 |
+
+Kết luận: **obscura rasterize canvas bằng CPU**, trần ~21 FPS cho một khung 1280×720, nên số đo ở máy này phản ánh
+trình duyệt chứ không phản ánh game. `bench_cmd` vì vậy ưu tiên **Playwright → obscura → chrome**; số báo cáo trong
+`docs/proof/phase-4/` phải chạy trên máy có Playwright/GPU (máy chấm Linux), và ghi rõ môi trường đo.
