@@ -95,19 +95,18 @@ class QuanSim:
         self.phase_tick += 1
         self.time_left_ticks = max(0, self.time_left_ticks - 1)
         # 1. đồng hồ: timer nấu/ăn (lát 4) và kiên nhẫn khách (lát 3)
-        quan_service.tick(self, events)
+        events.extend(quan_service.advance_stoves_and_eating(self))
         quan_customers.tick_patience(self, events)
         # 2-3. đi lại
         self._move(inp)
         # 4. tối đa MỘT interact: bếp/bàn, chọn theo (khoảng cách, bếp trước bàn, id)
-        if inp.pressed("interact"):
-            quan_service.interact_once(self, events)
+        events.extend(quan_service.handle_interact(self, inp))
         # 5. khách ăn xong trả tiền, 6. khách hết kiên nhẫn bỏ đi
-        quan_service.collect_finished(self, events)
+        events.extend(quan_service.handle_finished_eating(self))
         quan_customers.leave_if_impatient(self, events)
         # 7. đóng ca hoặc 8. sinh khách theo lịch
         if self.time_left_ticks <= 0:
-            quan_service.close_shift(self, events)
+            events.extend(quan_service.handle_closing(self))
             quan_customers.close_shift(self, events)
             self.done = True
             self.reason = "time"
