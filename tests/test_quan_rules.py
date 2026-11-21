@@ -74,7 +74,7 @@ class Customers(Base):
             self.assertEqual(self.snaps(rows)[70]["customers"], [])
 
 
-@unittest.skip("chờ ticket 04–05: luật bếp/phục vụ chưa có (fixture đã nạp được)")
+
 class Service(Base):
     def test_nau_dung_don_va_chin_sau_cook_s(self):
         """Đứng cạnh bếp, có đơn reserved: interact → cook_started (tiêu đúng nguyên liệu), 6 s sau dish_ready."""
@@ -90,7 +90,9 @@ class Service(Base):
             self.assertEqual(data["dish_id"], "ca_loc_nuong_trui")
             self.assertEqual(data["items"], ["ca_loc"])
             self.assertEqual(data["base_price"], 60)
-            self.assertEqual([e["tick"] for e in events(rows, "dish_ready")], [360])
+            # Bếp bắt đầu ở tick sự kiện cook_started, chín sau cook_s × 60 tick (cùng quy ước bước k → k+1)
+            self.assertEqual([e["tick"] for e in events(rows, "dish_ready")],
+                             [started[0]["tick"] + 360])
             snap = self.snaps(rows)[400]
             self.assertEqual(snap["stock"], {"ca_loc": 1})  # đã tiêu 1 khi bắt đầu nấu
             self.assertEqual(snap["stoves"][0]["state"], "ready")
@@ -112,6 +114,32 @@ class Service(Base):
             self.assertEqual(paid[0]["data"]["amount"], 72)
             self.assertEqual(paid[0]["data"]["reason"], "finished_eating")
             self.assertAlmostEqual(self.snaps(rows)[700]["reputation"], 3.2, places=2)
+
+    def test_dong_ca_tra_tien_khach_cho_roi_va_mot_quan_end(self):
+        """Hết ca: khách đang ăn trả ngay; khách còn chờ rời 'closing' không trừ uy tín; đúng MỘT quan_end."""
+        eating = {"quan": {"time_left_ticks": 5,
+                           "customers": [{"id": "C1", "table_id": "T1", "dish_id": "ca_loc_nuong_trui",
+                                           "state": "eating", "order_status": "served", "eat_ticks_left": 200,
+                                           "base_price": 60, "tip": 12, "reserved": {}}]}}
+        with Workdir() as w:
+            rows = self.run_quan(w, eating, ticks=20, every="1")
+            self.assertEqual([e["tick"] for e in events(rows, "quan_end")], [5],
+                             [(e["tick"], e["name"]) for e in events(rows)])
+            paid = events(rows, "paid")
+            self.assertEqual(len(paid), 1)
+            self.assertEqual((paid[0]["data"]["reason"], paid[0]["data"]["amount"]), ("closing", 72))
+            self.assertAlmostEqual(self.snaps(rows)[max(self.snaps(rows))]["reputation"], 3.2, places=2)
+
+        waiting = {"quan": {"time_left_ticks": 5,
+                            "customers": [{"id": "C1", "table_id": "T1", "dish_id": "ca_loc_nuong_trui",
+                                            "order_status": "unfulfillable", "reserved": {},
+                                            "patience_ticks_left": 3000}]}}
+        with Workdir() as w:
+            rows = self.run_quan(w, waiting, ticks=20, every="1", name="w")
+            left = events(rows, "customer_left")
+            self.assertEqual([(e["data"]["reason"], e["tick"]) for e in left], [("closing", 5)])
+            self.assertAlmostEqual(self.snaps(rows)[max(self.snaps(rows))]["reputation"], 3.0, places=2)
+            self.assertEqual(len(events(rows, "quan_end")), 1)
 
 
 if __name__ == "__main__":

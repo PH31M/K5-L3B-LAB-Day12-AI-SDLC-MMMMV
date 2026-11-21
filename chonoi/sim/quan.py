@@ -107,11 +107,12 @@ class QuanSim:
         # 7. đóng ca hoặc 8. sinh khách theo lịch
         if self.time_left_ticks <= 0:
             events.extend(quan_service.handle_closing(self))
-            quan_customers.close_shift(self, events)
             self.done = True
             self.reason = "time"
-            events.append(("quan_end", {"reason": "time", "money": self.money, "earned": self.earned,
-                                        "shift_earned": self.shift_earned, "reputation": self.reputation}))
+            # `handle_closing` đã phát `quan_end`; chỉ phát bổ sung nếu nó không làm (vd. khung rỗng)
+            if not any(name == "quan_end" for name, _ in events):
+                events.append(("quan_end", {"reason": "time", "money": self.money, "earned": self.earned,
+                                            "shift_earned": self.shift_earned, "reputation": self.reputation}))
         else:
             quan_customers.spawn_due(self, events)
         return events
