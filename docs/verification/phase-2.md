@@ -24,3 +24,17 @@ Cách kiểm chung: `python3 tools/run_checks.py` · test riêng: `PYTHONPATH=te
 ## Còn lại của Phase 2
 
 Cá bơi/sinh (02), Cá Sấu (03), quán 2 bếp/4 bàn/6 món (04), `day` + Shop + pause (05), HUD (06), mở rộng `net` (07).
+
+## Ticket 03 — Cá Sấu (xong, chờ merge)
+
+| AC | Cách kiểm | Kết quả |
+|---|---|---|
+| Patrol 1.0 m/s, tới waypoint thì đổi mục tiêu cho bước sau | `test_monsters.Patrol` | đạt |
+| Chỉ M1 ở Ngày 1; M2 từ Ngày 3 | `test_chi_co_m1_ngay_1` | đạt |
+| Chase 3.0 m/s khi người chơi d ≥ 10 và cách ≤ 10 m; về patrol khi > 16 m hoặc lên mặt nước | `test_monsters.Chase` | đạt |
+| Chạm: −1 Máu, rơi `floor(giỏ/2)` theo LIFO, bất tử 90 tick, `monster_hit {monster_id,hp,lost,pos}` | `test_hit_mat_mau_roi_nua_gio_va_bat_tu` | đạt |
+| Bất tử không bị hit lần hai | `test_bat_tu_khong_bi_hit_lan_hai` | đạt |
+| Recoil 60 bước từ bước sau, lùi xa người chơi, không gây hit | `test_recoil_lui_ra_va_khong_hit` | đạt |
+| Không hit khi người chơi ở mặt nước | `test_khong_hit_khi_nguoi_choi_o_mat_nuoc` | đạt |
+| Máu 0 do quái: `faint {cause:"monster"}`, `gather_end` fainted, kho rỗng | `test_ngat_do_quai_kho_rong_va_gather_end` | đạt |
+| Scenario `monsters[]` thay danh sách mặc định | `test_scenario_thay_danh_sach_quai` | đạt |

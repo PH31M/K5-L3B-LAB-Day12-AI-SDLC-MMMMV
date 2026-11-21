@@ -27,7 +27,7 @@ class DaySim:
         self.done = False
         self.reason = None
         # Pha sáng dựng từ khối gather của scenario (nếu có)
-        self.inner = GatherSim(tuning, scenario.get("gather", {}), streams, ids)
+        self.inner = GatherSim(tuning, scenario.get("gather", {}), streams, ids, day=self.day)
 
     # --- giao diện cho runner -------------------------------------------------
     @property
