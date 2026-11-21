@@ -383,6 +383,189 @@ class TestQuanService(unittest.TestCase):
         self.assertEqual(sim.stoves[0]["state"], "idle")
         self.assertIsNone(sim.stoves[0]["dish"])
 
+    def test_drop_turn_never_tries_second_candidate(self):
+        # Bếp B1 gần hơn (0.5m) đang nấu dở.
+        # Bếp B2 xa hơn (1.0m) idle và có đơn chờ nấu.
+        sim = create_mock_sim(
+            pos=[0.0, 0.0],
+            stoves=[
+                {"id": "B1", "pos": [0.5, 0.0], "state": "cooking", "cook_ticks_left": 50},
+                {"id": "B2", "pos": [1.0, 0.0], "state": "idle"},
+            ],
+            customers=[
+                {
+                    "id": "C1",
+                    "table_id": "T1",
+                    "dish_id": "goi_bong_sung",
+                    "state": "waiting",
+                    "order_status": "reserved",
+                    "order_tick": 5,
+                }
+            ],
+            stock={"bong_sung": 10},
+        )
+        events = handle_interact(sim, MockInput(["interact"]))
+        # Bỏ lượt ngay vì B1 đang nấu dở -> Không có event nào phát sinh
+        self.assertEqual(events, [])
+        # B2 tuyệt đối không được thử sang
+        self.assertEqual(sim.stoves[1]["state"], "idle")
+        self.assertEqual(sim.customers[0]["order_status"], "reserved")
+
+    def test_oldest_reserved_order_tie_breaker(self):
+        # 3 khách đang chờ:
+        # C1: order_tick 20, table_id T1
+        # C2: order_tick 10, table_id T3
+        # C3: order_tick 10, table_id T2  -> C3 thắng vì order_tick 10 nhỏ nhất và T2 < T3
+        sim = create_mock_sim(
+            pos=[2.0, 8.0],
+            stoves=[{"id": "B1", "pos": [2.0, 8.0], "state": "idle"}],
+            customers=[
+                {"id": "C1", "table_id": "T1", "dish_id": "goi_bong_sung", "state": "waiting", "order_status": "reserved", "order_tick": 20},
+                {"id": "C2", "table_id": "T3", "dish_id": "goi_bong_sung", "state": "waiting", "order_status": "reserved", "order_tick": 10},
+                {"id": "C3", "table_id": "T2", "dish_id": "goi_bong_sung", "state": "waiting", "order_status": "reserved", "order_tick": 10},
+            ],
+            stock={"bong_sung": 10},
+        )
+        events = handle_interact(sim, MockInput(["interact"]))
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0][0], "cook_started")
+        self.assertEqual(events[0][1]["order_id"], "C3")
+        self.assertEqual(sim.customers[2]["order_status"], "assigned")
+        self.assertEqual(sim.customers[1]["order_status"], "reserved")
+
+    def test_dish_picked_and_served_and_eating_flow(self):
+        # 1. Bếp B1 ready với món của khách C1
+        sim = create_mock_sim(
+            pos=[2.0, 8.0],
+            hand=None,
+            stoves=[
+                {"id": "B1", "pos": [2.0, 8.0], "state": "ready", "dish": "goi_bong_sung", "order_id": "C1", "base_price": 40}
+            ],
+            tables=[{"id": "T1", "pos": [9.0, 2.0]}],
+            customers=[
+                {
+                    "id": "C1",
+                    "table_id": "T1",
+                    "dish_id": "goi_bong_sung",
+                    "state": "waiting",
+                    "order_status": "assigned",
+                    "patience_ticks_left": 3000,
+                }
+            ],
+        )
+
+        # 2. Người chơi tương tác với bếp -> dish_picked
+        pick_events = handle_interact(sim, MockInput(["interact"]))
+        self.assertEqual(len(pick_events), 1)
+        self.assertEqual(pick_events[0][0], "dish_picked")
+        self.assertEqual(pick_events[0][1], {"stove_id": "B1", "order_id": "C1", "dish_id": "goi_bong_sung"})
+        self.assertEqual(sim.hand, {"order_id": "C1", "dish_id": "goi_bong_sung", "base_price": 40})
+        self.assertEqual(sim.stoves[0]["state"], "idle")
+        self.assertIsNone(sim.stoves[0]["dish"])
+
+        # 3. Người chơi di chuyển tới bàn T1 và tương tác -> served
+        sim.pos = [9.0, 2.0]
+        serve_events = handle_interact(sim, MockInput(["interact"]))
+        self.assertEqual(len(serve_events), 1)
+        self.assertEqual(serve_events[0][0], "served")
+        served_data = serve_events[0][1]
+        self.assertEqual(served_data["order_id"], "C1")
+        self.assertEqual(served_data["table_id"], "T1")
+        self.assertEqual(served_data["dish_id"], "goi_bong_sung")
+        self.assertEqual(served_data["patience_ticks_left"], 3000)
+        self.assertEqual(served_data["base_price"], 40)
+        self.assertEqual(served_data["tip"], 8)  # 3000/3600 >= 0.5 -> floor(40 * 0.2) = 8
+        self.assertIsNone(sim.hand)
+
+        # 4. Khách ăn: eat_ticks_left = 600, giảm dần mỗi tick
+        c = sim.customers[0]
+        self.assertEqual(c["state"], "eating")
+        self.assertEqual(c["eat_ticks_left"], 600)
+
+        # Tua 600 tick
+        c["eat_ticks_left"] = 1
+        advance_stoves_and_eating(sim)
+        self.assertEqual(c["eat_ticks_left"], 0)
+
+        # 5. Khách ăn xong trả tiền
+        pay_events = handle_finished_eating(sim)
+        self.assertEqual(len(pay_events), 1)
+        self.assertEqual(pay_events[0][0], "paid")
+        paid_data = pay_events[0][1]
+        self.assertEqual(paid_data["order_id"], "C1")
+        self.assertEqual(paid_data["table_id"], "T1")
+        self.assertEqual(paid_data["base_price"], 40)
+        self.assertEqual(paid_data["tip"], 8)
+        self.assertEqual(paid_data["amount"], 48)
+        self.assertEqual(paid_data["reason"], "finished_eating")
+
+        self.assertEqual(sim.money, 48)
+        self.assertEqual(sim.earned, 48)
+        self.assertEqual(sim.shift_earned, 48)
+        self.assertAlmostEqual(sim.reputation, 3.2)  # 3.0 + 0.2 tip_reputation
+        self.assertEqual(sim.customers, [])  # Bàn được giải phóng
+
+        # Tính điểm
+        self.assertEqual(compute_score(sim.earned, sim.reputation), 48 + 100 * 3)
+
+    def test_closing_immediate_payment_for_just_served(self):
+        # Khách C1 vừa được giao món trong tick cuối, khách C2 vẫn đang chờ
+        sim = create_mock_sim(
+            time_left_ticks=0,
+            reputation=3.0,
+            customers=[
+                {
+                    "id": "C1",
+                    "table_id": "T1",
+                    "dish_id": "lau_ca_linh_dien_dien",
+                    "state": "eating",
+                    "order_status": "served",
+                    "eat_ticks_left": 600,  # Vừa mới giao
+                    "base_price": 120,
+                    "tip": 24,
+                },
+                {
+                    "id": "C2",
+                    "table_id": "T2",
+                    "dish_id": "goi_bong_sung",
+                    "state": "waiting",
+                    "order_status": "reserved",
+                    "patience_ticks_left": 1500,
+                },
+            ],
+        )
+        events = handle_closing(sim)
+        # Kiểm tra C1 trả tiền ngay lập tức
+        paid_events = [e[1] for e in events if e[0] == "paid"]
+        self.assertEqual(len(paid_events), 1)
+        self.assertEqual(paid_events[0]["order_id"], "C1")
+        self.assertEqual(paid_events[0]["reason"], "closing")
+        self.assertEqual(paid_events[0]["amount"], 144)  # 120 + 24
+
+        # Kiểm tra C2 rời không bị trừ uy tín
+        left_events = [e[1] for e in events if e[0] == "customer_left"]
+        self.assertEqual(len(left_events), 1)
+        self.assertEqual(left_events[0]["order_id"], "C2")
+        self.assertEqual(left_events[0]["reason"], "closing")
+        # Uy tín chỉ tăng do C1 có tip (+0.2), C2 không trừ
+        self.assertAlmostEqual(left_events[0]["reputation"], 3.2)
+        self.assertAlmostEqual(sim.reputation, 3.2)
+
+        # Sự kiện quan_end phát đúng 1 lần
+        end_events = [e[1] for e in events if e[0] == "quan_end"]
+        self.assertEqual(len(end_events), 1)
+        self.assertEqual(end_events[0]["reason"], "time")
+        self.assertEqual(end_events[0]["money"], 144)
+        self.assertEqual(end_events[0]["earned"], 144)
+        self.assertEqual(end_events[0]["shift_earned"], 144)
+        self.assertAlmostEqual(end_events[0]["reputation"], 3.2)
+
+        self.assertTrue(sim.done)
+        self.assertEqual(sim.reason, "time")
+        self.assertEqual(sim.customers, [])
+
+
+
 
 if __name__ == "__main__":
     unittest.main()
