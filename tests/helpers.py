@@ -25,9 +25,9 @@ def headless_cmd():
     """Lệnh headless khai trong game.contract.json — test chạy qua đây nên dùng được với MỌI ngôn ngữ."""
     with open(os.path.join(ROOT, "game.contract.json"), encoding="utf-8") as f:
         cmd = shlex.split(json.load(f)["headless_cmd"])
-        if cmd and cmd[0] == "python3" and sys.platform == "win32":
-            cmd[0] = sys.executable
-        return cmd
+    if cmd and cmd[0] in ("python3", "python") and sys.platform == "win32":
+        cmd[0] = sys.executable
+    return cmd
 
 
 def run_headless(*args, cwd=ROOT):
