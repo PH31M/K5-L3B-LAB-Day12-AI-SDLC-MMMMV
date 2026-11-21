@@ -154,10 +154,96 @@ def _validate_quan(b, tuning):
         _pos("player.pos", p["pos"], qb, axes=("x", "z"))
     if "vel" in p and not (isinstance(p["vel"], list) and len(p["vel"]) == 2 and all(_num(c) for c in p["vel"])):
         raise BadInput("player.vel phải là [x, z]")
+
+    menu = tuning["menu"]
+    stock = b.get("stock", {})
     table_ids = [c.get("table_id") for c in b.get("customers", [])]
     known = {t["id"] for t in tuning["quan"]["tables"]} | {t.get("id") for t in b.get("tables", [])}
-    for c in b.get("customers", []):
-        if not isinstance(c.get("table_id"), str) or c["table_id"] not in known:
-            raise BadInput(f"customers.{c['id']}: table_id phải là bàn có thật")
     if len(table_ids) != len(set(table_ids)):
         raise BadInput("hai khách cùng bàn")
+
+    # --- bếp: state hợp lệ, cooking phải còn timer, món phải có trong menu ---
+    for s in b.get("stoves", []):
+        state = s.get("state", "idle")
+        if state not in ("idle", "cooking", "ready"):
+            raise BadInput(f"stoves.{s['id']}: state phải là idle/cooking/ready")
+        if state in ("cooking", "ready") and s.get("dish") not in menu:
+            raise BadInput(f"stoves.{s['id']}: món phải có trong menu")
+        if state == "cooking":
+            v = s.get("cook_ticks_left")
+            if isinstance(v, bool) or not isinstance(v, int) or v <= 0:
+                raise BadInput(f"stoves.{s['id']}: cooking phải có cook_ticks_left dương")
+        if state == "ready" and "ready_ticks" in s:
+            _nonneg_int(f"stoves.{s['id']}.ready_ticks", s["ready_ticks"])
+
+    # --- tay: null hoặc payload {order_id, dish_id, base_price} ---
+    hand = b.get("hand")
+    if hand is not None:
+        if not isinstance(hand, dict) or set(hand) != {"order_id", "dish_id", "base_price"}:
+            raise BadInput("hand phải là null hoặc {order_id, dish_id, base_price}")
+        if not isinstance(hand["order_id"], str) or not hand["order_id"]:
+            raise BadInput("hand.order_id phải là chuỗi khác rỗng")
+        if hand["dish_id"] not in menu:
+            raise BadInput("hand.dish_id phải có trong menu")
+        if isinstance(hand["base_price"], bool) or not isinstance(hand["base_price"], int) or hand["base_price"] <= 0:
+            raise BadInput("hand.base_price phải là số nguyên dương")
+
+    # --- khách: trạng thái, giữ chỗ, liên kết với bếp/tay ---
+    holding = {}
+    for s in b.get("stoves", []):
+        if s.get("state") in ("cooking", "ready"):
+            if s.get("order_id"):
+                holding.setdefault(s["order_id"], []).append("stove")
+    if hand is not None:
+        holding.setdefault(hand["order_id"], []).append("hand")
+    held_so_far = {}
+    for c in b.get("customers", []):
+        cid = c["id"]
+        if not isinstance(c.get("table_id"), str) or c["table_id"] not in known:
+            raise BadInput(f"customers.{cid}: table_id phải là bàn có thật")
+        dish = c.get("dish_id")
+        if dish not in menu:
+            raise BadInput(f"customers.{cid}: dish_id phải có trong menu")
+        state = c.get("state", "waiting")
+        if state not in ("waiting", "eating"):
+            raise BadInput(f"customers.{cid}: state phải là waiting hoặc eating")
+        status = c.get("order_status", "reserved")
+        if status not in ("reserved", "assigned", "unfulfillable", "served"):
+            raise BadInput(f"customers.{cid}: order_status không hợp lệ")
+        for key in ("order_tick", "patience_ticks_left", "eat_ticks_left"):
+            if key in c:
+                _nonneg_int(f"customers.{cid}.{key}", c[key])
+        reserved = c.get("reserved") or {}
+        if reserved:
+            reserved = validate_items(reserved)
+            if reserved != menu[dish]["recipe"]:
+                raise BadInput(f"customers.{cid}: reserved khác công thức của món")
+            for kind, n in reserved.items():
+                held_so_far[kind] = held_so_far.get(kind, 0) + n
+                if held_so_far[kind] > stock.get(kind, 0):
+                    raise BadInput(f"customers.{cid}: tổng giữ {kind} quá tồn")
+        if state == "eating":
+            if status != "served":
+                raise BadInput(f"customers.{cid}: đang ăn phải có order_status served")
+            if not isinstance(c.get("eat_ticks_left"), int) or c["eat_ticks_left"] <= 0:
+                raise BadInput(f"customers.{cid}: đang ăn phải có eat_ticks_left dương")
+            for key in ("base_price", "tip"):
+                if isinstance(c.get(key), bool) or not isinstance(c.get(key), int) or c[key] < 0:
+                    raise BadInput(f"customers.{cid}: {key} phải là số nguyên không âm")
+        if status == "unfulfillable" and (state != "waiting" or reserved):
+            raise BadInput(f"customers.{cid}: unfulfillable phải đang chờ và không giữ chỗ")
+        if status == "assigned":
+            if reserved:
+                raise BadInput(f"customers.{cid}: đơn assigned không giữ chỗ")
+            if len(holding.get(cid, [])) != 1:
+                raise BadInput(f"customers.{cid}: đơn assigned phải có đúng một món ở bếp hoặc tay")
+    for s in b.get("stoves", []):
+        oid = s.get("order_id")
+        if oid:
+            if hand is not None and hand["order_id"] == oid:
+                raise BadInput("bếp và tay không được giữ cùng một đơn")
+            match = [c for c in b.get("customers", []) if c["id"] == oid]
+            if not match:
+                raise BadInput(f"stoves.{s['id']}: order_id không có khách tương ứng")
+            if match[0].get("dish_id") != s.get("dish"):
+                raise BadInput(f"stoves.{s['id']}: món trên bếp không khớp đơn")
