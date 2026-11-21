@@ -37,8 +37,8 @@ class QuanSim:
                             cook_ticks_left=s.get("cook_ticks_left", 0), ready_ticks=s.get("ready_ticks", 0))
                        for s in self._merge(t["stoves"], scenario.get("stoves", []))]
         self.tables = self._merge(t["tables"], scenario.get("tables", []))
-        # TODO(nhóm): khách dựng sẵn từ scenario (customers[]) và suy ra giữ chỗ (reserved).
-        self.customers = [dict(c, reserved=c.get("reserved", {})) for c in scenario.get("customers", [])]
+        # Khách dựng sẵn từ scenario: điền mặc định theo PRD-0 mục D.
+        self.customers = [self._customer(c) for c in scenario.get("customers", [])]
         for e in self.customers:
             ids.reserve(e["id"])
         self.money = 0
@@ -46,6 +46,25 @@ class QuanSim:
         self.shift_earned = 0
         self.done = False
         self.reason = None
+
+    def _customer(self, c):
+        """Áp mặc định: waiting, order_tick 0, kiên nhẫn đầy, reserved theo công thức."""
+        cu = {
+            "id": c["id"],
+            "table_id": c["table_id"],
+            "dish_id": c["dish_id"],
+            "order_tick": c.get("order_tick", 0),
+            "state": c.get("state", "waiting"),
+            "patience_ticks_left": c.get("patience_ticks_left", int(round(self.t["patience_s"] * TICK))),
+            "eat_ticks_left": c.get("eat_ticks_left", 0),
+            "order_status": c.get("order_status", "reserved"),
+            "reserved": dict(c.get("reserved") or {}),
+            "base_price": c.get("base_price"),
+            "tip": c.get("tip"),
+        }
+        if cu["order_status"] == "reserved" and not cu["reserved"]:
+            cu["reserved"] = dict(self.menu[cu["dish_id"]]["recipe"])
+        return cu
 
     @staticmethod
     def _merge(defaults, updates):
