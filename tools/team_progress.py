@@ -24,8 +24,8 @@ def git(*args):
 
 def main():
     git("fetch", "--prune", "origin")
-    base = git("rev-list", "--max-parents=0", "origin/main")
-    print(f"{'nhánh':22} {'người':10} {'vượt main':>9}  {'commit gần nhất'}")
+    base = "336e0f4"  # commit kickoff Phase 1; commit trước đó là của giảng viên
+    print(f"{'nhánh':22} {'người':10} {'trên nhánh':>10}  {'trạng thái':12} {'commit gần nhất'}")
     print("-" * 92)
     total = 0
     for branch, who in BRANCHES:
@@ -33,15 +33,15 @@ def main():
         if not git("rev-parse", "--verify", ref):
             print(f"{branch:22} {who:10} {'—':>9}  (chưa có trên remote)")
             continue
-        ahead = git("rev-list", "--count", f"origin/main..{ref}") or "0"
-        total += int(ahead)
-        if git("rev-parse", ref) == git("rev-parse", "origin/main"):
-            print(f"{branch:22} {who:10} {ahead:>9}  (chưa bắt đầu — trùng main)")
-            continue
-        log = git("log", "-1", "--format=%an|%ar|%s", ref)
-        print(f"{branch:22} {who:10} {ahead:>9}  {log}")
+        n = git("rev-list", "--count", f"{base}..{ref}") or "0"
+        total += int(n)
+        merged = subprocess.run(["git", "merge-base", "--is-ancestor", ref, "origin/main"],
+                                cwd=ROOT).returncode == 0
+        state = "chưa bắt đầu" if int(n) == 0 else ("đã merge" if merged else "đang làm")
+        log = git("log", "-1", "--format=%an|%ar|%s", ref) if int(n) else ""
+        print(f"{branch:22} {who:10} {n:>10}  {state:12} {log}")
     print("-" * 92)
-    print(f"Tổng commit vượt main: {total}  ·  main: {git('log', '-1', '--format=%h %s', 'origin/main')}")
+    print(f"Tổng commit của nhóm (sau kickoff): {total}  ·  main: {git('log', '-1', '--format=%h %s', 'origin/main')}")
     print(f"Từ commit gốc của giảng viên: {git('rev-list', '--count', f'{base}..origin/main')} commit trên main")
     return 0
 
