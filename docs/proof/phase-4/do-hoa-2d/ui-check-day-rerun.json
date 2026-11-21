@@ -1,0 +1,74 @@
+{
+ "day": {
+  "shots": [
+   "day-1-gather-intro.png",
+   "day-2-quan.png",
+   "day-3-quan-customer.png",
+   "day-4-shop.png",
+   "day-5-shop-bought.png",
+   "day-6-shop-fail.png",
+   "day-7-summary.png"
+  ],
+  "after_E": {
+   "mode": "day",
+   "phase": "quan",
+   "bounds": {
+    "x": [
+     0,
+     16
+    ],
+    "z": [
+     0,
+     10
+    ]
+   }
+  },
+  "client_scene": "quan",
+  "W_increases_z_in_day_quan": true,
+  "shop_meta_max_ticks": 600,
+  "after_buy": {
+   "money": 250,
+   "upgrades": {
+    "oxygen": 1
+   },
+   "active": {}
+  },
+  "shop_events": [
+   [
+    "bought",
+    {
+     "upgrade": "oxygen",
+     "level": 1,
+     "price": 200,
+     "money": 250
+    }
+   ],
+   [
+    "bought",
+    {
+     "upgrade": "net",
+     "level": 1,
+     "price": 250,
+     "money": 0
+    }
+   ],
+   [
+    "buy_failed",
+    {
+     "action": "hp",
+     "reason": "funds"
+    }
+   ]
+  ],
+  "end": {
+   "reason": "days_complete",
+   "money": 0,
+   "upgrades": {
+    "oxygen": 1,
+    "net": 1
+   }
+  },
+  "fps": 59.79836209123221,
+  "errors": []
+ }
+}

@@ -228,6 +228,9 @@ def main(argv=None) -> int:
     p.add_argument("--scenario")
     p.add_argument("--inventory", help="chỉ với quan: nạp kho từ file")
     p.add_argument("--inventory-out", dest="inventory_out", help="chỉ với gather: ghi kho khi kết thúc buổi")
+    p.add_argument("--dive-speed-mult", dest="dive_speed_mult", type=float, default=1.75,
+                   help="hệ số tốc độ bơi lên/xuống ở ca sáng khi chơi trên trình duyệt (mặc định 1.75; "
+                        "1 = đúng contract). Headless không dùng.")
     a = p.parse_args(argv)
     try:
         if a.mode != "day" and a.days is not None:
@@ -236,7 +239,11 @@ def main(argv=None) -> int:
             raise BadInput("--inventory chỉ dùng với quan")
         if a.inventory_out and a.mode != "gather":
             raise BadInput("--inventory-out chỉ dùng với gather")
+        if not 0.5 <= a.dive_speed_mult <= 4:
+            raise BadInput("--dive-speed-mult phải trong [0.5, 4]")
         tuning = load_contract()["tuning"]
+        # Sáng tạo chỉ ở bản live (tắt ở headless): lặn/nổi nhanh hơn cho dễ chơi trên màn hình.
+        tuning["gather"] = dict(tuning["gather"], live_vertical_speed_mult=a.dive_speed_mult)
         scenario = load_scenario(a.scenario, a.mode, tuning)
         inventory = read_inventory(a.inventory) if a.inventory else None
         if inventory is not None and "stock" in scenario:

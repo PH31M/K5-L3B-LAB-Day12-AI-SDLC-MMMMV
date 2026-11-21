@@ -54,6 +54,26 @@ class LiveServerTest(unittest.TestCase):
         finally:
             server.stop()
 
+    def test_live_vertical_speed_mult_only_when_set(self):
+        """Hệ số lặn nhanh chỉ có hiệu lực khi live gắn vào tuning; mặc định (headless) vẫn = swim_speed."""
+        from chonoi.inputs import InputState
+        from chonoi.runner import Session
+
+        def depth_after(mult, ticks=66):
+            tuning = load_contract()["tuning"]
+            if mult is not None:
+                tuning["gather"] = dict(tuning["gather"], live_vertical_speed_mult=mult)
+            sess = Session("gather", tuning, {}, 1)
+            for _ in range(ticks):
+                sess.step(InputState((0.0, 1.0), {}, set()))
+            return sess.snapshot()["player"]["pos"][1], tuning["gather"]
+
+        base, g = depth_after(None)
+        fast, _ = depth_after(1.75)
+        ramp = g["ramp_max_ticks"]
+        self.assertAlmostEqual(base, g["swim_speed"] * (66 - ramp) / 60 + g["swim_speed"] * (ramp - 1) / 2 / 60, delta=0.15)
+        self.assertAlmostEqual(fast / base, 1.75, delta=0.02)
+
     def test_state_input_and_clean_stop(self):
         tuning = load_contract()["tuning"]
         server = LiveServer(LiveGame("gather", tuning, {}, 1), port=0)  # cổng ngẫu nhiên
