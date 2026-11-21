@@ -4,12 +4,12 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** in-review
 
-- [ ] `interact` trong `dock_radius` → `gather_end` lý do `docked` **trước** mọi xử lý hái, không cần đang ở mặt nước.
-- [ ] Ngoài bến, chỉ hái khi ở mặt nước: nút `ready` gần nhất trong `interact_radius`, hòa khoảng cách thì id nhỏ hơn theo `id_key` (`N2` trước `N10`).
-- [ ] Đủ chỗ: thêm `node_yield` nguyên liệu, đặt `regrow_ticks = regrow_s × 60`, phát `gather` `{node_id, kind, amount}`; thiếu chỗ: `hold_full` `{action:"gather", node_id, required, free}`, nút **giữ nguyên** (không đặt mọc lại).
-- [ ] Nút về 0 phát `node_regrown` và hái lại được ngay bước đó.
-- [ ] `catch` khi hết hồi chiêu và đang dưới nước: chọn đàn gần nhất trong `catch_radius`, hòa thì id nhỏ hơn; đủ chỗ thì thêm toàn bộ `fish_yield`, **xóa đàn**, phát `fish_caught` `{fish_id, kind, yield}`, đặt hồi chiêu `catch_cooldown_s × 60`.
-- [ ] Thiếu chỗ: `hold_full` `{action:"catch", fish_id, required, free}`, giữ đàn, không thử đàn khác; không có đàn trong tầm: không event, không hồi chiêu.
-- [ ] File kho ghi đúng một lần khi `gather_end` (ngất ghi `{"items":{}}`), khớp `inventory` trong event; chạm `--ticks` trước khi kết thúc thì không tạo/ghi đè file.
+- [x] `interact` trong `dock_radius` → `gather_end` lý do `docked` **trước** mọi xử lý hái, không cần đang ở mặt nước.
+- [x] Ngoài bến, chỉ hái khi ở mặt nước: nút `ready` gần nhất trong `interact_radius`, hòa khoảng cách thì id nhỏ hơn theo `id_key` (`N2` trước `N10`).
+- [x] Đủ chỗ: thêm `node_yield` nguyên liệu, đặt `regrow_ticks = regrow_s × 60`, phát `gather` `{node_id, kind, amount}`; thiếu chỗ: `hold_full` `{action:"gather", node_id, required, free}`, nút **giữ nguyên** (không đặt mọc lại).
+- [x] Nút về 0 phát `node_regrown` và hái lại được ngay bước đó.
+- [x] `catch` khi hết hồi chiêu và đang dưới nước: chọn đàn gần nhất trong `catch_radius`, hòa thì id nhỏ hơn; đủ chỗ thì thêm toàn bộ `fish_yield`, **xóa đàn**, phát `fish_caught` `{fish_id, kind, yield}`, đặt hồi chiêu `catch_cooldown_s × 60`.
+- [x] Thiếu chỗ: `hold_full` `{action:"catch", fish_id, required, free}`, giữ đàn, không thử đàn khác; không có đàn trong tầm: không event, không hồi chiêu.
+- [x] File kho ghi đúng một lần khi `gather_end` (ngất ghi `{"items":{}}`), khớp `inventory` trong event; chạm `--ticks` trước khi kết thúc thì không tạo/ghi đè file.
