@@ -50,3 +50,18 @@ Cá bơi/sinh (02), Cá Sấu (03), quán 2 bếp/4 bàn/6 món (04), `day` + Sh
 | Kế hoạch ngày không phải trần bán: khách vẫn gọi được tiếp khi còn nguyên liệu | `test_quan_p2.TestQuanP2.test_day_plan_filtering` | đạt |
 | Có bàn trống nhưng không món nào đủ nguyên liệu -> phát `no_dish` và không sinh khách | `test_quan_p2.TestQuanP2.test_no_dish_when_ingredients_insufficient` | đạt |
 | `random_customers: false` không sinh khách tự động | `test_quan_p2.TestQuanP2.test_random_customers_false` | đạt |
+
+## Ticket 06 — HUD vòng ngày (client)
+
+Kiểm bằng trình duyệt thật (Playwright/Chromium 1280×720), ảnh trong `docs/proof/phase-2/`.
+
+| AC | Cách kiểm | Bằng chứng | Kết quả |
+|---|---|---|---|
+| HUD sáng có "đã lấy/cần" theo `day_plan` | mở `--mode day`, đọc panel phải | `day-gather.png` | đạt |
+| Intro Ngày hiện món Má Tư giao | 4 giây đầu pha sáng | `day-gather.png` | đạt |
+| Màn Shop: tiền, uy tín, 3 nâng cấp + giá, kho mang về | chờ sang pha `shop` | `day-shop.png` | đạt |
+| Mua bằng phím 1/2/3 | bấm `1` → tiền 600 → 400, `upgrades.oxygen = 1` | `day-shop.png` | đạt |
+| Đóng Shop sớm bằng Enter | bấm Enter → sang Ngày 2 | log phiên kiểm | đạt |
+| Pause Esc/P, đồng hồ gameplay đứng | `sim_tick` giữ nguyên khi paused, nhấn lại → `resumed` | `day-paused.png` | đạt |
+
+Ghi chú: `DayResult`/`Summary` sau Ngày 5 chưa làm; hiện chỉ có overlay kết thúc sẵn có.
