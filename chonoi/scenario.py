@@ -196,6 +196,7 @@ def _validate_quan(b, tuning):
                 holding.setdefault(s["order_id"], []).append("stove")
     if hand is not None:
         holding.setdefault(hand["order_id"], []).append("hand")
+    held_so_far = {}
     for c in b.get("customers", []):
         cid = c["id"]
         if not isinstance(c.get("table_id"), str) or c["table_id"] not in known:
@@ -218,8 +219,9 @@ def _validate_quan(b, tuning):
             if reserved != menu[dish]["recipe"]:
                 raise BadInput(f"customers.{cid}: reserved khác công thức của món")
             for kind, n in reserved.items():
-                if n > stock.get(kind, 0):
-                    raise BadInput(f"customers.{cid}: giữ {kind} quá tồn")
+                held_so_far[kind] = held_so_far.get(kind, 0) + n
+                if held_so_far[kind] > stock.get(kind, 0):
+                    raise BadInput(f"customers.{cid}: tổng giữ {kind} quá tồn")
         if state == "eating":
             if status != "served":
                 raise BadInput(f"customers.{cid}: đang ăn phải có order_status served")
