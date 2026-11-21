@@ -31,4 +31,4 @@ Lab Day 12 — Quán Ăn Chợ Nổi. Python thuần (stdlib), contract **v1.1**
 
 ## Skill
 
-`.agents/skills/phase-gate/` (cổng + tag) · `.agents/skills/headless-probe/` (dựng ca kiểm bằng scenario + inputs).
+`.agents/skills/gate/` (cổng kiểm + tag) · `.agents/skills/probe/` (dựng ca kiểm headless hoặc live UI).
