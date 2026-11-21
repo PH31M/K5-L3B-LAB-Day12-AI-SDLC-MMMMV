@@ -222,8 +222,11 @@ class GatherSim:
 
     def _move(self, inp):
         speed = self.t["swim_speed"]
+        # Hệ số tốc độ lên/xuống CHỈ do chonoi.live gắn vào tuning trong bộ nhớ; manifest không có khóa này
+        # nên headless/JSONL/test luôn dùng 1.0 (đúng Test Contract).
+        vspeed = speed * float(self.t.get("live_vertical_speed_mult", 1.0))
         mx, md = inp.move
-        self.vel = ramp_velocity(self, (mx * speed, md * speed), int(self.t["ramp_max_ticks"]))
+        self.vel = ramp_velocity(self, (mx * speed, md * vspeed), int(self.t["ramp_max_ticks"]))
         if (mx, md) != (0.0, 0.0):
             self.heading = math.degrees(math.atan2(md, mx)) % 360
         b = self.t["bounds"]

@@ -67,7 +67,14 @@ PYTHONPATH=tests:. python3 -m unittest discover -s tests -v
 python3 -m chonoi.live --mode gather
 ```
 
-**Điều khiển:** WASD hoặc mũi tên để bơi/đi · `E` tương tác (cập bến, hái) · `Space` bắt cá · `R` chơi lại.
+**Điều khiển:** WASD hoặc mũi tên để bơi/đi · `E` tương tác (cập bến, hái, nấu, bưng, dọn món) · `Space` bắt cá · `P`/`Esc` tạm dừng · `R` chơi lại · `M` âm thanh · `C` tương phản cao · Shop: `1/2/3` mua, `Enter` đóng. URL: `?fx=0` tắt hiệu ứng, `?hc=1` tương phản cao, `?fps=1` hiện FPS.
+**Chơi trọn một ngày:** `python3 -m chonoi.live --mode day --days 1` (Gather → cập bến → Quán → Shop → tổng kết).
+
+### Sáng tạo của nhóm
+
+- **Đồ họa 2D làng quê Nam Bộ** (chỉ ở client trình duyệt, headless không đổi): ca sáng là mặt cắt sông với trời bình minh, núi xa có sương, ruộng lúa, lũy tre, nhà tranh/nhà ngói, bến Má Tư; nước chia tầng nông–giữa–sâu theo màu phù sa. Cá lóc, đàn cá linh, cặp cá kèo và Cá Sấu Năm Chèo có hình riêng; bông súng, điên điển, kèo nèo khác nhau và hiện vòng mọc lại. Ca tối là quán nhà bè mái ngói, gạch tàu, dây đèn vàng trên sông đêm; bảng phấn cho biết món nào đủ nguyên liệu và đơn nào bếp sẽ nấu kế tiếp. Cuối ngày là ghe hàng có cây bẹo bán nâng cấp. Mọi hình vẽ thủ tục, 0 KB ảnh (xem `CREDITS.md`).
+- **Lặn/nổi nhanh khi chơi trên trình duyệt:** `chonoi.live` nhân tốc độ trục dọc ở ca sáng ×1.75 (≈ 7 m/s; ngang giữ 4 m/s). Đổi bằng `--dive-speed-mult N` (`1` = đúng contract). Headless, JSONL và test không bị ảnh hưởng vì manifest không có khóa `live_vertical_speed_mult`.
+- **HUD theo pha:** cảnh, trục phím và HUD chọn theo `snapshot.phase`; kho khả dụng = tồn trừ phần khách giữ; ba cảnh báo (Thủy quái, Hết hơi, Khách sắp giận) có chữ + biểu tượng, đọc được ở tương phản cao và `?fx=0`. Bằng chứng: `docs/proof/phase-4/do-hoa-2d/`.
 **Headless:** `python3 -m chonoi.headless --mode gather --seed 1 --ticks 600 --out out.jsonl`
 **Tính điểm:** `score = earned + 100 × floor(reputation)`.
 **Chơi trọn hai buổi:** `--mode gather --inventory-out kho.json`, rồi `--mode quan --inventory kho.json`.
