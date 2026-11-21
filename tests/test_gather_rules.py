@@ -24,6 +24,8 @@ class Base(unittest.TestCase):
         args = ["--mode", "gather", "--seed", "1", "--ticks", str(ticks),
                 "--snapshot-every", every, "--out", w.path(name + ".jsonl")]
         if scenario is not None:
+            # Hồi quy luật P1: fixture bắt cá giữ vị trí cũ; cá bơi có test P2 riêng.
+            scenario = {**scenario, "gather": {"random_fish": False, **scenario.get("gather", {})}}
             args += ["--scenario", write_json(w.path("sc.json"), scenario)]
         if inputs is not None:
             args += ["--inputs", write_json(w.path("in.json"), frames(*inputs))]
