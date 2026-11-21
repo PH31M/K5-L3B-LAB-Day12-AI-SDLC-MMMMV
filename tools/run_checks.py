@@ -88,11 +88,17 @@ def check_determinism(tmp):
     return a == b, f"{len(a)} byte, giống nhau: {a == b}"
 
 
+def check_evidence(tmp):
+    code, out = run([sys.executable, "tools/check_evidence.py"])
+    return code == 0, out.strip().splitlines()[-1] if out.strip() else ""
+
+
 def main():
     os.makedirs(PROOF, exist_ok=True)
     checks = [("unittest (unit + hộp đen)", check_unittest),
               ("smoke gather -> kho -> quan", check_smoke),
-              ("tất định cùng seed", check_determinism)]
+              ("tất định cùng seed", check_determinism),
+              ("bằng chứng dẫn đúng", check_evidence)]
     rows, ok_all = [], True
     with tempfile.TemporaryDirectory() as tmp:
         for name, fn in checks:
