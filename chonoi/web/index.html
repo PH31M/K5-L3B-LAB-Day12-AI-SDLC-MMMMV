@@ -1,939 +1,878 @@
 <!doctype html>
 <html lang="vi">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Quán Ăn Chợ Nổi — chơi thử</title>
-<style>
-  html, body { margin: 0; height: 100%; background: #0c1218; color: #e8eef2; font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; user-select: none; }
-  canvas { display: block; width: 100vw; height: 100vh; }
-</style>
-</head>
-<body>
-<canvas id="c"></canvas>
-<script>
-"use strict";
-/*
- * Client chơi trực tiếp — Phiên bản HUD Nâng Cao & VFX/Audio (Ticket 06 + Phase 2 + Phase 3 Ticket 05 - Vinh).
- * CHỈ ĐỌC snapshot từ GET /state và gửi phím qua POST /input.
- * An toàn tuyệt đối: thiếu trường nào thì bỏ qua, không văng lỗi JS.
- * Hỗ trợ ?fx=0 để tắt hiệu ứng nặng.
- * Hỗ trợ contract v1.0/v1.1 (đếm) lẫn v1.2 (cá thể + độ tươi fresh).
- * Phím: WASD / mũi tên = di chuyển · E = interact · Space = catch · R = chơi lại · M = âm thanh.
- */
-const cv = document.getElementById("c");
-const ctx = cv.getContext("2d");
-let snap = null, offline = false;
-let restartBtnRect = null;
-let soundBtnRect = null;
-let contrastBtnRect = null;
-
-// Kiểm tra tham số ?fx=0 và ?hc=1 (hoặc lưu trong sessionStorage - Ticket 03 Phase 4)
-const urlParams = new URLSearchParams(window.location.search);
-const noFx = urlParams.get("fx") === "0";
-let highContrast = urlParams.get("hc") === "1" || sessionStorage.getItem("chonoi_high_contrast") === "1";
-
-function toggleHighContrast() {
-  highContrast = !highContrast;
-  sessionStorage.setItem("chonoi_high_contrast", highContrast ? "1" : "0");
-}
-
-// ---------- HỆ THỐNG ÂM THANH PROCEDURAL (Web Audio API - Tự sinh 100%, 0 asset ngoài) ----------
-let audioCtx = null;
-let soundEnabled = true;
-let lastProcessedEventTick = -1;
-
-function initAudio() {
-  if (!audioCtx) {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (AudioContext) audioCtx = new AudioContext();
-  }
-  if (audioCtx && audioCtx.state === "suspended") {
-    audioCtx.resume();
-  }
-}
-
-function playTone(freq, duration, type = "sine", gainVal = 0.15) {
-  if (!soundEnabled || !audioCtx) return;
-  try {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    gain.gain.setValueAtTime(gainVal, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + duration);
-  } catch (e) {}
-}
-
-function playHarvest() {
-  if (!soundEnabled || !audioCtx) return;
-  playTone(523.25, 0.1, "triangle", 0.12);
-  setTimeout(() => playTone(659.25, 0.12, "triangle", 0.12), 50);
-  setTimeout(() => playTone(783.99, 0.18, "sine", 0.15), 100);
-}
-
-function playCatch() {
-  if (!soundEnabled || !audioCtx) return;
-  try {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(220, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.18);
-    gain.gain.setValueAtTime(0.18, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.22);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.22);
-  } catch (e) {}
-}
-
-function playSplash() {
-  if (!soundEnabled || !audioCtx) return;
-  try {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(340, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.22);
-    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.22);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.22);
-  } catch (e) {}
-}
-
-function playBell() {
-  if (!soundEnabled || !audioCtx) return;
-  playTone(880, 0.35, "sine", 0.18);
-  setTimeout(() => playTone(1760, 0.45, "sine", 0.12), 70);
-}
-
-function playCoin() {
-  if (!soundEnabled || !audioCtx) return;
-  playTone(987.77, 0.08, "sine", 0.15);
-  setTimeout(() => playTone(1318.51, 0.3, "sine", 0.18), 60);
-}
-
-function playAlert() {
-  if (!soundEnabled || !audioCtx) return;
-  playTone(330, 0.12, "square", 0.08);
-  setTimeout(() => playTone(293.66, 0.18, "square", 0.08), 100);
-}
-
-function playMonsterHit() {
-  if (!soundEnabled || !audioCtx) return;
-  try {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(140, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(35, audioCtx.currentTime + 0.35);
-    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.35);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.35);
-  } catch (e) {}
-}
-
-function playRoar() {
-  if (!soundEnabled || !audioCtx) return;
-  playTone(130, 0.25, "sawtooth", 0.16);
-  setTimeout(() => playTone(85, 0.35, "sawtooth", 0.2), 100);
-}
-
-// ---------- HIỆU ỨNG RUNG MÀN HÌNH (Screen Shake) ----------
-let shakeTicks = 0, shakeMag = 0;
-function triggerScreenShake(ticks = 15, mag = 6) {
-  if (noFx || highContrast) return;
-  shakeTicks = ticks;
-  shakeMag = mag;
-}
-
-// ---------- HIỆU ỨNG CHỮ NỔI / TIỀN THƯỞNG (Floating Text) ----------
-const floatingTexts = [];
-function addFloatingText(str, x, y, color = "#ffd54f") {
-  floatingTexts.push({ str, x, y, alpha: 1.0, dy: 0, color });
-}
-function updateAndDrawFloatingTexts() {
-  for (let i = floatingTexts.length - 1; i >= 0; i--) {
-    const ft = floatingTexts[i];
-    ft.dy -= 0.6;
-    ft.alpha -= 0.018;
-    if (ft.alpha <= 0) {
-      floatingTexts.splice(i, 1);
-      continue;
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quán Ăn Chợ Nổi — chơi thử</title>
+  <style>
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background: #0c1218;
+      color: #e8eef2;
+      font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      user-select: none;
     }
-    ctx.save();
-    ctx.globalAlpha = ft.alpha;
-    text(ft.str, ft.x, ft.y + ft.dy, {
-      size: 14,
-      weight: "bold",
-      align: "center",
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="c"></canvas>
+  <script>
+    "use strict";
+    /*
+     * Client chơi trực tiếp — Phiên bản HUD Nâng Cao & VFX/Audio (Ticket 06       Phase 2 + Phase 3 Ticket 05 - Vinh).
+ * CHỈ ĐỌC snapshot từ G     T /state và gửi phím qua POST /input.
+ * An toàn tuyệt đối: thiếu trư     ng nào thì bỏ qua, không văng lỗi JS.
+ * Hỗ trợ ?fx=0 để tắt hiệu ứng nặng.
+ * Hỗ      rợ     contract v1.0/v1.1 (đếm) lẫn v1.2 (cá thể     + độ tươi fresh).
+ * Phím: WASD     / mũi tên = di chuyển · E = intera    ct · Space = catch · R = chơ    i lại · M = âm thanh.
+ */
+    const cv = docume    nt.getElementById("c");
+    const ctx = cv.getContext("2d");
+    let snap = null, offline = false;
+    let restartBtnRect = null;
+    let soundBtnRect = null;
+    let contrastBtnRect = null;
+
+// Kiểm tra tham số     ?fx=0 và ?hc=1 (hoặc lưu       ong sessionStorage - Ticket 03 Phase 4)
+co      t urlParams = new URLSearchParams(window.location.search);
+con       noFx = urlParams.get("fx") === "0";
+    let highContrast = urlParams.get("hc") === "1" || se      ionStorage.getItem("chonoi_high_contrast") === "1";
+
+    function toggleHighContrast() {
+  high      ntrast = !highContrast;
+      sessionStorage.setItem("chonoi_high_contrast", highContrast ? "1" : "0");
+    }
+
+    // ----      ---- HỆ THỐNG ÂM THANH PROCEDURAL (Web Aud       API - Tự sinh 100%, 0 asset      goài) --------      
+    let audioCtx = ull;
+    let so    undEnabled = true;
+    let la      ProcessedEventTick = -
+
+      function initAu      o() {
+        if (!audioCtx) const AudioContext = windo        dioContext || window.webkitAudioContext;
+        if (AudioContext) audioCtx = new AudioContext();
+      }
+    if (au        tx && audioCtx.state === "suspended") {
+    a      io      x.resume();
+    }
+}
+    
+f    unction playTone(freq, duration, type = "sine", gainVal = 0.15) {
+      if (!soundEnabled || !audio    Ctx) return;
+      try {
+        const osc = dioCtx.createOscillato      );
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setV      ueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime      ainVal, audioCtx.currentTime);
+        gain.ga.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + du      tion);
+        osc.connect(gain);
+        gain.nnect(audioCt    x.de    stination);
+        osc.start();
+    os      stop(audioCtx.currentT      e + duration);
+      } catch (e) { }
+    }
+
+    function p      yHarvest() {
+      if (!soundEnabled || !audioCtx      return;
+      playTone(523.25, 0.1, "triangle"      0.12);
+  setT    imeo    ut(() => playTone(659.25, 0.12, "triangle", 0.12), 50);
+  setTime    out(() => playTone(783.99      0.18, "sine", 0.15), 100);
+    }
+
+    function ayCatch() {
+      i(!soundEnabled || !audioCtx) return;
+      try {
+        const c = audioCtx.createOscillator();
+        const gain        udioCtx.createGain();
+        osc.type = "sin            osc.frequency.setValueAtTime(         audioCtx.currentTime);
+        osc.uency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.18);
+             in.setValueAtTime(0.18, audioCtx.currentTime);
+        gain.gain.exponent          pToValueAtTime(        01      au    dioCt    x.currentTime + 0.22);
+        osc.connect(gai      ;
+        gain.connect(audioCtx.destination);
+    o        tart();
+        osc.stop(audioCtx.currentTime        .22);
+      } catch (e) { }
+    }
+
+functio        aySplash() {
+      if (!soundEnabled!audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        gain = audioCtx.createGain();
+        osc.type = "triangle";
+        osc.fre.setValueAtTime(340, audioCtx          ntTime); o.f      quency.exponentialRampToValue    AtTim    e(80, audioCtx.currentTime + 0.22);
+    gai    n.gain.setValueAtTime(0.       audio        currentTime);
+        gain.gain.exponentialRampToValueAtTime        001, audioCtx.currentTi         0.22);
+        osc.c      nect(gain);
+        gain.connect(aud      Ctx.destination);
+        os    c.start();
+        osc.stop(audioCtx.currentTime + 0.22);
+      } catch (e) { }
+    }
+
+      nction playBell() {
+      if (!soundEnabled | !audioCtx) return;
+      playTone(880, 0.35, "sine", .18);
+      setTimeout(()        playTone(1760, 0.4    5, "sine", 0.12), 70);
+
+      function playCoin       {
+        if (!soundEnabl || !audioCtx) ret      n;
+        playTone(987.77, 0.08, "sine"      0.15);
+        setTimeout(() = playTone(1318.51, 0    .3, "sine", 0.18), 60);
+
+        function playAlert() {
+          if (!soundEna      ed || !audioCtx) return;
+  playT      e(330, 0.12, "square", 0.08);
+          setTimeout(() =    > p    layTone(293.66, 0.18, "square", 0.08), 100);
+        }
+
+        function playMon      erHit() {
+          if (!soundEnabled || !audioCtx      return;
+          try {
+            const osc = audioCt      createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = "s        oth";
+            osc.frequency.setValue        me(140, audioCtx.currentTime);
+        os      frequency.exponentialRampToValueAtTime(3       audioCtx.curre    ntT    ime + 0.35);
+            gain.gain.setValueAtTime(0.3      audioCtx.currentT      e);
+            gain.gain.expo      ntialRampToValueAtTime(0.0001, audioCt      currentTime + 0.35);
+            osc.connect(g      n);
+            gain.connect(audioCtx.stination);
+            osc.start();
+            osc.stop(audioCt    x.c    urrentTime + 0.35);
+          } catch (e)      }
+      }
+
+functio      playRoar() {
+        if (!soundEnabled || !audioCtx) return;
+        playTone(130, 0.25, "sawtooth", 0.16);
+        setTimeo(() => playTone(85, 0.35, "sawtooth", 2), 100);
+      }
+
+      // ---------- HIỆU ỨNG      UNG MÀN HÌNH (Screen Shake) ----------
+      let akeTicks = 0, shakeMag = 0;
+      function iggerScreenShak    e(t    icks = 15, mag = 6) {
+        if (noFx || highContrast) return;
+        shakeTicks = tic;
+  shakeMag       mag;
+      }
+
+// ---------- HIỆU ỨNG CHỮ NỔI / TIỀN T      ỞNG (Floating Text)       --------
+con       floatingTexts = [];
+      function addFloatingText(str, x,      , color = "#ffd54f"          floatingTe        push({ str,         , alpha: 1.0, dy: 0, co });
+    }
+    function updateAndDrawFloating        s() {
+      for (le      i       floatingTexts.length - 1; i >= 0; i--) {
+         onst ft = floatingT      ts[i];
+        ft.dy -= 0.6;
+        ft.alpha -= 0.018;
+        if (ft.alpha = 0) {
+          tingTexts.splice(i, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.globalAlpha = ft.alpha;
+        text(ft.str, ft.x, ft.y + ft.dy, {
+          size: 14,
+          we    ight: "bold",
+          align: center",
       color: ft.color,
-      stroke: true
-    });
-    ctx.restore();
-  }
-}
-
-// ---------- HỆ THỐNG TOAST THÔNG BÁO HÀNG ƯƠN (Ticket 05) ----------
-const toasts = [];
-const seenSpoiledItems = new Set();
-
-function addToast(msg, durationTicks = 180, color = "#ff5252") {
-  toasts.push({ msg, ticks: durationTicks, maxTicks: durationTicks, color });
-  if (toasts.length > 4) toasts.shift();
-}
-
-function checkAudioAndGameEvents() {
-  if (!snap || !snap.events || !snap.events.length) return;
-  const evs = snap.events;
-  for (let i = 0; i < evs.length; i++) {
-    const ev = evs[i];
-    if (ev.tick > lastProcessedEventTick) {
-      lastProcessedEventTick = ev.tick;
-      if (ev.name === "gather") playHarvest();
-      else if (ev.name === "fish_caught") playCatch();
-      else if (ev.name === "dive" || ev.name === "surface") playSplash();
-      else if (ev.name === "dish_ready" || (ev.name === "gather_end" && ev.data?.reason === "docked")) playBell();
-      else if (ev.name === "paid") {
-        playCoin();
-        const tip = ev.data?.tip ? ` (+Tip ${ev.data.tip}k)` : "";
-        addFloatingText(`+${ev.data?.bill || 60}k 💰${tip}`, window.innerWidth / 2, window.innerHeight / 2 - 30, "#ffd54f");
+          stroke: true
+        });
+        ctx.restore();
       }
-      else if (ev.name === "choke" || ev.name === "oxygen_empty") {
+    }
+
+    // ------      -- HỆ THỐNG TOAST THÔNG BÁO HÀNG ƯƠN (Ticket 05) ----------
+    const t    oas    ts = [];
+    const seenS      iledItems = new Set();
+
+    function addToast(msg, durationTicks = 180, color = "#ff5252") {
+      toasts.push({ msg, t    ick    s: durationTicks, maxTicks      durationTicks, color });
+      if (toasts.lengt > 4) toasts.shift();
+    }
+        ction checkAudioAndGameEvents() {
+      if (!snap || !snap.events || !snap.events.length) retur          onst evs = snap.events;
+      for (let i = 0; i < evs.length;) {
+        co    nst     ev = evs[i];
+        if (ev.tick > lastPro    cessedEventTick) {
+          lastProcessedEventTi = ev.tick;
+          if (ev.name === "gather") playHarvest();
+          else if (ev.nam === "fish_caught") playCatch();
+          else (ev.name === "dive" || ev.name === "surface")      laySplash();
+      else if (ev.name === i      _ready" || (ev.name === "gather_end" && ev.data?.r      son === "docked")) playBell();
+          else if (ev.m === "paid") {
+            playCoin();
+             onst tip = ev.data?.t ? ` (+Tip ${ed      a.tip
+          }k)` : "";
+              dFloatingText(`+ ${ev        a?.bill || 60 }k         ip
+        } `, window.inn        dth / 2, window.        rHeight / 2 - 30, "#ffd54f")                }
+      else if     (e    v.name === "choke" || ev.name === "oxygen_empty") {
         playAlert();
-        triggerScreenShake(12, 4);
+            triggerScreenShake(1       4);
       }
-      else if (ev.name === "monster_hit") {
+      else if (ev.      me === "monster_hit") {
         playMonsterHit();
-        triggerScreenShake(20, 8);
-        const lost = ev.data?.lost || [];
-        const lostCount = Array.isArray(lost) ? lost.length : 0;
-        addFloatingText("💥 -1 ♥ THỦY QUÁI TÁP!", window.innerWidth / 2, window.innerHeight / 2 - 40, "#ff1744");
-        addToast(`💥 [🐊 THỦY QUÁI] Bị Cá Sấu táp mất 1 Máu${lostCount > 0 ? " và rơi " + lostCount + " món" : ""}!`, 200, "#ff1744");
+            triggerScreenShake(20, 8);
+        const lost = ev      ata?.lost || [];
+        cons      lostCount = Array.isArray(lost) ? lost.length : 0;
+        addFloatingText("💥 -1 ♥ THỦY       ÁI TÁP!", window.innerWidth / 2, window.innerHeight / 2 - 40,       ff1744");
+        addToast(`💥[🐊 THỦY QUÁI] Bị Cá Sấu      áp mất 1 Máu${l      tCount > 0 ? " và rơi " + l      tCount + " món" : "" } !`, 200, "#ff      44");
       }
       else if (ev.name === "faint") {
-        playAlert();
-        triggerScreenShake(25, 10);
-        const cause = ev.data?.cause || "";
-        if (cause === "monster") {
-          addToast("☠️ [🐊 THỦY QUÁI] Út Sen đã bị Cá Sấu ngoạm kiệt sức!", 240, "#d50000");
-        } else {
-          addToast("😵 [🫁 HẾT HƠI] Cạn kiệt oxy! Út Sen đã ngất đi!", 240, "#d50000");
-        }
+            playAlert();
+        trig      rScreenShake(25, 10);
+        co      t cause = ev.data?.cause || ""              if (cause =       "monster") {
+          addToast("☠️ [🐊      HỦY QUÁI] Út      en đã bị Cá Sấu ngoạm kiệt sứ      ", 240, "#d50000");
+            } else {
+              addToast("😵 [🫁 H       HƠI] Cạn kiệt oxy! Út       n đã ngất đi!",      40, "#d50000");             }
       }
-      else if (ev.name === "spoiled") {
+      else if (ev        e === "spoiled") {
         playAlert();
-        const itId = ev.data?.item_id || ev.data?.id || "";
-        if (itId && !seenSpoiledItems.has(itId)) {
-          seenSpoiledItems.add(itId);
+            const itId = ev.dat        tem_id || ev.data         || "";
+        if (itId &        eenSpoiledItems.has(itId))                 seenS        edItems.add(itId);
           const kind = ev.data?.kind || "";
-          const name = KIND_NAME[kind] || kind || itId;
-          addToast(`⚠️ [ƯƠN] Cá thể ${itId} (${name}) đã bị ươn (< 30)!`, 180, "#ff5252");
+          const name       KIN      NAME[kind] || kind      | itId;
+          addToast(`⚠️[ƯƠN] Cá thể ${ itId } (${ name }) đã      ị ươn(< 30)!`, 180, "#ff52      ");
         }
       }
     }
   }
 }
 
-// ---------- HỆ THỐNG PARTICLE SINH ĐỘNG (Bọt khí & Khói bếp) ----------
+// ---------- HỆ THỐNG      ARTICLE SINH ĐỘNG (Bọt khí       Khói bếp) -------      -
 const bubbles = [];
-const steams = [];
-
+const steams = []      
 function updateParticles() {
-  if (noFx || highContrast) return;
-  const p = snap?.player;
-  if (snap?.mode === "gather" && p && p.pos && p.pos[1] > 0.5) {
-    if (Math.random() < 0.3) {
+  i      (noFx || highContrast) return;
+  const       = snap?.play      ;
+  if (snap?.mode === "gather" && p && p.pos        p.pos[1] > 0.5) {
+    if      Math.random() < 0      ) {
       bubbles.push({
-        x: p.pos[0] + (Math.random() - 0.5) * 0.8,
-        d: p.pos[1],
+        x: p.pos[0] + (Math.ra      om() - 0.5) *       8,
+        d: p.pos[1      
         r: Math.random() * 2.2 + 1.2,
         speed: Math.random() * 0.04 + 0.02,
         alpha: 0.65
-      });
+          });
     }
   }
-  for (let i = bubbles.length - 1; i >= 0; i--) {
-    const b = bubbles[i];
-    b.d -= b.speed;
-    b.x += (Math.random() - 0.5) * 0.02;
-    if (b.d <= 0.2) bubbles.splice(i, 1);
+      for (let i = bubbles.len      h - 1; i >= 0; i--) {
+    const b       bubbles[i];
+    b.d -=        peed;
+    b.x += (Math.random() -        ) * 0.02;
+    if (b.d <= 0.2) bubble        lice(i, 1);
   }
-  if (bubbles.length > 40) bubbles.shift();
+  if (bubble        ngth > 40) bubble        ift();
 
   if (snap?.mode === "quan" && snap.stoves) {
     snap.stoves.forEach((st) => {
-      if (st.state === "cooking" && Math.random() < 0.35) {
+          if (st.stat        = "cooking" && Math.r        m() < 0.35) {
         steams.push({
           x: st.pos[0] + (Math.random() - 0.5) * 0.6,
           z: st.pos[1] + 0.5,
-          r: Math.random() * 3 + 2,
-          speed: Math.random() * 0.03 + 0.015,
+          r:         .random() * 3 + 2,
+          spe          th.random() * 0.03 + 0.015,
           alpha: 0.5
         });
       }
     });
   }
   for (let i = steams.length - 1; i >= 0; i--) {
-    const s = steams[i];
-    s.z += s.speed;
+    co        s       steam      i];
+    s.      += s.speed;
     s.alpha -= 0.012;
-    s.r += 0.04;
-    if (s.alpha <= 0.02) steams.splice(i, 1);
+        s.r += 0.04;
+    if (s.al        <= 0.02) ste        splice(i, 1);
   }
-  if (steams.length > 35) steams.shift();
+  if (steams.length > 35)        ams.shift();
 }
 
-// ---------- vào: phím & chuột ----------
+// ---------- vào: phím & chuột ----        --
 const down = new Set();
-const MOVE_KEYS = { w: "u", arrowup: "u", s: "d", arrowdown: "d", a: "l", arrowleft: "l", d: "r", arrowright: "r" };
-let queue = [], inflight = false, lastSent = "";
+c         MOVE_KEYS = { w:        , arrowup: "u", s: "d", arrowdown: "d", a: "l", arrowleft        ", d: "r", a        right: "r" };
+let        ue = [], inflight = false        stSent = "";
 
-function currentInput() {
-  const mode = snap ? snap.mode : "gather";
-  const dx = (down.has("r") ? 1 : 0) - (down.has("l") ? 1 : 0);
+function currentIn        ) {
+  const mode = snap ? snap.         : "gather";        onst dx = (down        ("r") ? 1 : 0) - (down.has("l") ? 1 : 0);
   let dy = (down.has("d") ? 1 : 0) - (down.has("u") ? 1 : 0);
-  if (mode === "quan") dy = -dy;
-  return { move: [dx, dy], interact: down.has("interact"), catch: down.has("catch") };
+  if (mode === "quan") dy = -dy        ret      n { move: [dx, dy], int      act: down.has("interact"), ca      h: down.has("catch        ;
 }
 function pushInput() {
-  const s = JSON.stringify(currentInput());
+  const s = JSON.        ngify(currentInput());
   if (s === lastSent) return;
   lastSent = s;
   queue.push(s);
   flush();
 }
-async function flush() {
-  if (inflight) return;
+async         tion flush() {
+  if (inflig        return;
   inflight = true;
-  while (queue.length) {
+  while (que          gth) {
     const body = queue.shift();
-    try { await fetch("/input", { method: "POST", body, headers: { "Content-Type": "application/json" } }); }
-    catch (e) {}
+              await fetch("/inp           method: "POST", body, headers: { "Content-Type": "appli          /json" } }); }         c         (e) {}
   }
   inflight = false;
 }
-function keyName(e) { return e.key.length === 1 ? e.key.toLowerCase() : e.key.toLowerCase(); }
+function           e(e) { return e.key.length === 1 ? e.key.to          ase() : e.key.toL          se(); }
 
 addEventListener("keydown", (e) => {
-  initAudio();
-  const k = keyName(e);
-  if (e.repeat) { if (k === " " || k.startsWith("arrow")) e.preventDefault(); return; }
-  if (MOVE_KEYS[k]) { down.add(MOVE_KEYS[k]); e.preventDefault(); }
-  else if (k === "e") down.add("interact");
-  else if (k === " ") { down.add("catch"); e.preventDefault(); }
-  else if (k === "r") { restartGame(); }
-  else if (k === "m") { soundEnabled = !soundEnabled; }
-  else if (k === "c") { toggleHighContrast(); }
+  initAudio()          nst k = keyNam        ;
+         (e.repeat) { if        === " " || k.startsWith("ar        )) e.preventDefau        ; return; }
+  if (MOVE_KEYS[k]) { down.add        E_KEYS[k]);         eventDefault(); }
+  else if (k === "e") down.add("        ract");
+  else if (k === " ")        own.add("catch"); e        ventDefault(); }
+        se if (k === "r") {         artGame(); }
+  else if (k === "m") { soundEnabled = !soundEnabled; }        lse if (k === "        { toggleHighContrast(); }
   pushInput();
 });
-addEventListener("keyup", (e) => {
+addEventListener("        p", (e) => {
   const k = keyName(e);
   if (MOVE_KEYS[k]) down.delete(MOVE_KEYS[k]);
-  else if (k === "e") down.delete("interact");
-  else if (k === " ") down.delete("catch");
+  else if         == "e") down.delete("interact");
+  else if (k === " ") down.delete(c        
   pushInput();
-});
-addEventListener("blur", () => { down.clear(); pushInput(); });
+});        EventListener("blur", ()          down.clear(); pushInp            ;
 
 function restartGame() {
-  fetch("/restart", { method: "POST" });
-  lastSent = "";
-  down.clear();
-}
-
-cv.addEventListener("click", (e) => {
-  initAudio();
-  const rect = cv.getBoundingClientRect();
-  const x = e.clientX - rect.left;
+  fetch("/r             { method: "POST"             stSent = "";
+  dow          r()        
+c        dEventListener("click", (e) => {
+         tAudio();
+  const rect =          tBoundingClientRect();
+  const x = e.clientX          t.left;
   const y = e.clientY - rect.top;
-
-  if (contrastBtnRect) {
-    if (x >= contrastBtnRect.x && x <= contrastBtnRect.x + contrastBtnRect.w &&
-        y >= contrastBtnRect.y && y <= contrastBtnRect.y + contrastBtnRect.h) {
-      toggleHighContrast();
-      return;
+          (contrastBtnRect) {
+               = contrastBtnRect.x && x <= contrastBtnRect.x + contrastBtnRect.                 y >= contrastBtnRect.y && y <= contrastBtnRect.y + contrast          t.h)             toggleHighContra                return;
     }
-  }
-
-  if (soundBtnRect) {
+              (soundBtnRect) {
     if (x >= soundBtnRect.x && x <= soundBtnRect.x + soundBtnRect.w &&
-        y >= soundBtnRect.y && y <= soundBtnRect.y + soundBtnRect.h) {
-      soundEnabled = !soundEnabled;
+        y >= sou            t.y && y <= soundBtnRect.y + soundBtnRect.               soundEnabled = !soundEnabled;
       return;
     }
   }
 
   if (snap && snap.finished && restartBtnRect) {
-    if (x >= restartBtnRect.x && x <= restartBtnRect.x + restartBtnRect.w &&
-        y >= restartBtnRect.y && y <= restartBtnRect.y + restartBtnRect.h) {
+    if (x >= restartBtnRect.x &            estartBtnRect.x + restartBtnRect.w &&
+               = restartBtnRect.y && y <= restartBtnRect.y + restartBtnRect.h) {
       restartGame();
     }
   }
 });
 
 cv.addEventListener("mousemove", (e) => {
-  const rect = cv.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  const rect =             un          ie        ct          const x = e.clientX - rect.lef         const           clientY - rect.top;
 
   let isHover = false;
-  if (contrastBtnRect && x >= contrastBtnRect.x && x <= contrastBtnRect.x + contrastBtnRect.w &&
-      y >= contrastBtnRect.y && y <= contrastBtnRect.y + contrastBtnRect.h) {
+          contrastBtnRect && x >= contrastBtnRect          x <= contrastBtnRect.x + c            tnRect.w &&
+      y >= contrastBtnRect.y && y <= contrastBtnRect            trastBtnRect.h) {
     isHover = true;
   }
-  if (soundBtnRect && x >= soundBtnRect.x && x <= soundBtnRect.x + soundBtnRect.w &&
-      y >= soundBtnRect.y && y <= soundBtnRect.y + soundBtnRect.h) {
+  if (soundBtnRect &&           ound          t.x && x <= soundBt            + soundBtnRect.w &&
+      y               nRect.y && y <= soundBtnRect.y + soundBtnRect.h) {
     isHover = true;
   }
   if (snap && snap.finished && restartBtnRect &&
-      x >= restartBtnRect.x && x <= restartBtnRect.x + restartBtnRect.w &&
-      y >= restartBtnRect.y && y <= restartBtnRect.y + restartBtnRect.h) {
-    isHover = true;
-  }
-  cv.style.cursor = isHover ? "pointer" : "default";
+             = restartBtnRect.x && x <              tnRect.x + restartBtnRect.w &&
+      y >= restartBtnRect.y && y <= restartBtnRect.y + restartBtnRect.h) {            over = tr              cv.style.cursor = isHover ? "pointer" : "default";
 });
 
 // ---------- ra: poll snapshot ----------
 async function poll() {
   try {
-    const r = await fetch("/state", { cache: "no-store" });
+    const r =            et          ta         {      ach       "no-store" });
     snap = await r.json();
-    offline = false;
+    offl      e = false;
     checkAudioAndGameEvents();
-  } catch (e) { offline = true; }
+      } catch (e) { offline = tru       }
   setTimeout(poll, 16);
 }
 poll();
 
-// ---------- từ điển & bảng màu ----------
+// --      ------ từ điển & bả       màu ----------
 const KIND_COLOR = {
   ca_loc: "#7c9a52",
-  ca_linh: "#82b1ff",
-  ca_keo: "#d9a066",
+  ca_linh: "      2b1ff",
+  ca_keo: "#d9a0      ",
   bong_dien_dien: "#ffd54f",
-  bong_sung: "#f06292",
+  bong_sung:       f06292",
   keo_neo: "#81c784"
 };
-const KIND_NAME = {
+const KIND_NAM      = {
   ca_loc: "Cá lóc",
-  ca_linh: "Cá linh",
+  ca_linh: "Cá li        
   ca_keo: "Cá kèo",
   bong_dien_dien: "Bông điên điển",
-  bong_sung: "Bông súng",
-  keo_neo: "Kèo nèo"
+  bong_sun       "Bôn      súng",
+  keo_neo: "Kèo      èo"
 };
-const DISH_NAME = {
+const DISH_         = {
   ca_loc_nuong_trui: "Cá lóc nướng trui",
   goi_bong_sung: "Gỏi bông súng",
-  lau_ca_linh_dien_dien: "Lẩu cá linh điên điển",
-  canh_chua_ca_loc: "Canh chua cá lóc",
+  lau_ca_linh_dien_dien:       ẩu        linh điên điển",
+  canh_chua_ca_loc: "Ca       chua cá lóc",
   ca_keo_nuong: "Cá kèo nướng",
-  lau_mam: "Lẩu mắm"
+  lau_mam: "Lẩu         
 };
 const DISH_ICON = {
   ca_loc_nuong_trui: "🐟",
-  goi_bong_sung: "🥗",
-  lau_ca_linh_dien_dien: "🍲",
-  canh_chua_ca_loc: "🥣",
-  ca_keo_nuong: "🍢",
+  g        ong_sung: "🥗",
+  lau_ca_linh_dien        n: "🍲",
+  canh_chua_ca_loc: "🥣"        ca_keo_nuong: "🍢",
   lau_mam: "🥘"
 };
-const kc = (k) => KIND_COLOR[k] || "#bbbbbb";
+const kc = (k) => KIND_COLOR[k] ||         bbbb";
 
 function fit() {
   const dpr = window.devicePixelRatio || 1;
-  const w = innerWidth, h = innerHeight;
-  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+  const w = innerWidth, h         nerHeight;
+  if (cv.width !== Math.round(w * dpr) || cv.heigh      !==      ath.round(h * d      )) {
     cv.width = Math.round(w * dpr);
-    cv.height = Math.round(h * dpr);
+          .height = Math.ro        h * dpr);
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return [w, h];
-}
+  return [w,         }
 
 function roundRect(ctx, x, y, w, h, r = 6) {
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
+  ctx.mo        (x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
   ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
+  ctx.a      To(       y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
+  ctx.clo      Path();
 }
 
-function text(s, x, y, o = {}) {
+function text        x, y, o = {}) {
   ctx.save();
-  ctx.font = (o.weight ? o.weight + " " : "") + (o.size || 14) + "px system-ui, -apple-system, sans-serif";
-  ctx.textAlign = o.align || "left";
-  ctx.textBaseline = o.base || "alphabetic";
-  const str = String(s ?? "");
+  ctx.font = (o.w          ? o.weight + " " : "") + (o.siz          4) + "px system-ui, -apple-system          -serif";
+        x.te      Ali       = o.align || "left";
+  ctx.textBaseline = o.base ||      alphabetic";
+  const str = String(s ?? ""      
   if (highContrast || o.stroke) {
-    ctx.strokeStyle = o.strokeColor || "#000000";
-    ctx.lineWidth = o.strokeWidth || (highContrast ? 3.5 : 2.5);
-    ctx.strokeText(str, x, y);
+    c      .strokeStyle = o.strokeColor || "#000000";
+        ctx.lineWidth = o.strokeWidth || (highContrast ? 3.5 : 2.5);
+    ctx.strokeText(str,      , y);
   }
-  let fillCol = o.color || "#e8eef2";
+  let fillC       = o.color || "#e8eef2";
   if (highContrast) {
-    if (o.hcColor) fillCol = o.hcColor;
-    else if (fillCol === "#000000") fillCol = "#000000";
-    else if (fillCol === "#ff5252" || fillCol === "#ff1744") fillCol = "#ff3333";
-    else if (fillCol === "#ffd54f" || fillCol === "#ffca28") fillCol = "#ffff00";
-    else fillCol = "#ffffff";
+    if (        Color) fillCol = o.hcColor;
+             if (fillCol === "#000000") fillCol        #000000";
+    else if (fillCol === "#ff5252" || fillCol === "        744") fillCol = "#ff3333";
+    else if (fillCo        = "#ffd54f" || fillCol === "#ffc          fillCol = "#ffff00";
+    else fill          "#ffffff";
   }
-  ctx.fillStyle = fillCol;
-  ctx.fillText(str, x, y);
+  ctx.fillStyle = fillCo          tx.fillText(str, x, y);
   ctx.restore();
-}
-
-function bar(x, y, w, h, frac, color, label = "", bg = "rgba(0,0,0,0.5)") {
-  ctx.save();
-  roundRect(ctx, x, y, w, h, Math.min(h / 2, 4));
-  ctx.fillStyle = highContrast ? "#000000" : bg;
+}          tion bar(x,           h, frac, color, label = "", bg = "rgba(0,0,          ") {
+  ctx.save          roundRect(ctx, x, y,            ath.min(h / 2, 4));
+  ctx.fillStyle = highContrast ? "#            : bg;
   ctx.fill();
-  const clamped = Math.max(0, Math.min(1, frac || 0));
-  if (clamped > 0) {
-    ctx.save();
+  const clampe            .max(0, Math          ,          ||        ;
+  if (clamped > 0            ctx.save();
     ctx.clip();
     ctx.fillStyle = color;
-    ctx.fillRect(x, y, w * clamped, h);
+           .fillRect(x, y, w * clamped, h);
     ctx.restore();
   }
-  ctx.strokeStyle = highContrast ? "#ffffff" : "rgba(255,255,255,0.25)";
+  ctx.strokeStyle = highContrast ? "#ffffff"        rgba(255,255,255,0.25)";
   ctx.lineWidth = highContrast ? 2.2 : 1;
-  roundRect(ctx, x, y, w, h, Math.min(h / 2, 4));
+  roundRect(ctx, x, y, w, h, Math        (h / 2, 4));
   ctx.stroke();
   if (label) {
     text(label, x + w / 2, y + h / 2, {
-      size: Math.max(10, h - 4),
-      align: "center",
+            ze:      ath.max(10, h - 4),           align: "center",
       base: "middle",
       weight: "bold",
-      color: highContrast ? "#ffff00" : "#ffffff",
-      stroke: highContrast
+      color: highCo        st ? "#ffff00" : "#ffffff",
+      stroke: h      hCon    tra    st
     });
   }
   ctx.restore();
 }
 
 function fmtTime(ticks) {
-  if (ticks === undefined || ticks === null) return "--:--";
-  const s = Math.ceil(ticks / 60);
-  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  if (ticks === und    efined || ticks === null)       turn "--:--";
+  const s = Math.      il(ticks / 60);
+  return Math.floor(s / 60) + ":" + S      ing(s % 60).padStart(2, "0");
 }
 
-function brief(d) {
-  try { const s = JSON.stringify(d); return s.length > 55 ? s.slice(0, 52) + "…" : s; } catch (e) { return ""; }
+function       ief(d) {
+  try { const s = JS      .stringify(d); return s.length > 55 ? s.slice(0, 52) + "…" : s; } catch      e) { return ""; }
 }
 
-function eventLog(w, h) {
+function eventLog      , h) {
   const ev = (snap?.events || []).slice(-5);
-  ev.forEach((e, i) => {
-    text(`t${e.tick} ${e.name} ${brief(e.data)}`, w - 14, h - 68 - (ev.length - 1 - i) * 16, {
-      size: 11, align: "right", color: highContrast ? "#ffffff" : "rgba(232,238,242,0.7)"
+  ev.forE      h((e, i) => {
+    text      t${e.tick} ${e.name} ${brie      e.data)
+      } `, w - 14, h - 68 - (ev.length - 1       i) * 16, {
+      size: 11, a      gn: "right", color:      ighContrast ? "#ffffff" : "rgba(232,238,242,0      )"
     });
-  });
+  }      
 }
 
-function drawPrompt(textStr, x, y, o = {}) {
-  ctx.save();
-  ctx.font = "bold " + (o.size || 13) + "px system-ui, sans-serif";
+function drawPrompt(textStr, x, y,       = {}) {
+  ctx.save      ;
+  ctx.font = "bold " + (o.si        | 13) + "px system-ui, sans-serif";
   const tw = ctx.measureText(textStr).width;
-  const pw = tw + 28, ph = (o.size || 13) + 16;
-  const px = x - pw / 2, py = y - ph / 2;
-  
-  ctx.fillStyle = highContrast ? "#000000" : (o.bg || "rgba(12, 20, 28, 0.92)");
-  roundRect(ctx, px, py, pw, ph, 8);
+        nst      w = tw + 28, ph       (o.size || 13) + 16;
+  const px = x       pw / 2, py = y - ph / 2;          ctx.fillStyle = highContrast ? "#000000"        o.bg || "rgba(12, 20, 28, 0.92)");
+  r        Rect(ctx, px, py, pw, ph, 8);
   ctx.fill();
   
-  ctx.strokeStyle = highContrast ? (o.hcBorder || "#ffff00") : (o.border || "#ffca28");
-  ctx.lineWidth = highContrast ? 2.5 : 1.8;
-  ctx.stroke();
+  ctx.strokeStyle = hin        t ? (o.hcBorder || "#ffff00") : (o.border || "#ffca28");
+  ctx.lineWidth = highContrast        .5 : 1.8;
+  ctx.strok        
   
-  text(textStr, x, y, {
+  text(t        tr, x, y, {
     size: o.size || 13,
     align: "center",
-    base: "middle",
-    weight: "bold",
-    color: highContrast ? (o.hcColor || "#ffff00") : (o.color || "#ffffff"),
+    base        iddle",
+    weight:        ld",
+    color:        hContrast ? (o.hcColor || "#ffff00") : (o.color || "#ffffff"),
     stroke: highContrast
   });
   ctx.restore();
 }
 
-function drawToasts(w, h) {
-  for (let i = toasts.length - 1; i >= 0; i--) {
+functio        awToasts(w, h)           r (let i = toasts.length - 1; i >= 0; i--) {
     const t = toasts[i];
     t.ticks--;
     if (t.ticks <= 0) {
       toasts.splice(i, 1);
-      continue;
-    }
+      c        nu           }
     const alpha = Math.min(1, t.ticks / 25);
-    const y = 84 + (toasts.length - 1 - i) * 36;
+              y = 84 + (toasts.length - 1 - i) * 36;
     ctx.save();
     ctx.globalAlpha = alpha;
-    drawPrompt(t.msg, w / 2, y, { size: 12, color: "#fff", bg: "rgba(35, 12, 16, 0.94)", border: t.color });
+    drawPrompt(t.msg, w / 2, y, { size: 12, color: "#fff", bg: "rgba(35, 12,         0.94)", border: t.col          
     ctx.restore();
   }
 }
 
 // ---------- HIỆU ỨNG NGUY HIỂM / VIGNETTE KHẨN CẤP ----------
-function drawDangerVignette(w, h) {
-  if (highContrast) return; // Không dùng vignette mờ trong chế độ tương phản cao
-  const p = snap?.player;
-  const isChased = snap?.mode === "gather" && (snap?.monsters || []).some((m) => m.state === "chase");
-  const isLowOxy = snap?.mode === "gather" && p && p.oxygen_ticks !== undefined && p.oxygen_max_ticks && (p.oxygen_ticks / p.oxygen_max_ticks < 0.25);
-  const isLowHp = p && p.hp === 1;
-
-  if (isChased || isLowOxy || isLowHp) {
-    const timeSec = (snap?.tick || 0) / 60;
-    const pulse = 0.5 + 0.5 * Math.sin(timeSec * (isChased ? 8 : 4));
-    const vigGrad = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.72);
-    const col = isChased ? `rgba(255, 0, 0, ${0.28 * pulse})` : isLowOxy ? `rgba(0, 140, 255, ${0.24 * pulse})` : `rgba(220, 0, 0, ${0.22 * pulse})`;
-    vigGrad.addColorStop(0, "rgba(0,0,0,0)");
-    vigGrad.addColorStop(1, col);
-    ctx.save();
-    ctx.fillStyle = vigGrad;
-    ctx.fillRect(0, 0, w, h);
-    ctx.restore();
-  }
+function drawDangerVignette(w, h) {        f       ighCo      rast) return; // Không dùng vignette mờ      rong chế độ tương phản cao
+  const p = snap?.      ayer;
+  const isChas       = snap?.mode === "gather" && (snap?.monsters || []).some((m) => m.      ate === "chase");
+  const isLowOxy =      nap?.mode === "gather" &&        & p.oxygen_        s !== undefined && p.oxygen_max_ticks && (p.oxygen_ticks / p.oxygen_max_ticks < 0.25);
+        nst isLowHp = p && p.hp ===        
+  if (isCha        || isLowOxy || isLowHp) {
+           st timeSec = (snap?        k || 0) / 60;
+        const pulse = 0.5 + 0.5 * Math.sin(timeSec * (isChased ? 8 : 4));
+    const vigGrad = ctx.createRadialGradient(w / 2, h /         ath.min(w, h)         35, w / 2, h / 2, Math.max        h) * 0.72           const col = isChased ? `rgba(255, 0, 0, ${ 0.28 * pulse }          sLowOxy ? `rgba(0, 140, 255, ${0.24 * p`          ba(220, 0, 0, ${pulse})`;
+      vigGrad.addColorStop(0, "rgba(0,0,0          
+    vigGrad.addC          op(1, col);
+      ctx.save();
+      ctx.fillSt          vigGrad;
+      illRect(0, 0, w, h);
+      ctx.e();
+    }
 }
 
-// ---------- HỌA TIẾT CÁ SẤU NĂM CHÈO (PRD Phase 2 §1.2 & Ticket 03 Phase 4) ----------
-function drawCrocodile(m, sx, sy, s, p, timeSec) {
-  if (!m || !m.pos) return;
-  const mx = sx(m.pos[0]);
-  const my = sy(m.pos[1]);
-  const isChase = m.state === "chase";
-  const isRecoil = m.state === "recoil" || m.state === "stunned";
+    // ------          ỌA TIẾT CÁ SẤU           ÈO (PRD Phase 2 §1.2          ket 03 Phase 4) ----------
+    function drawCrocodile(m, sx, sy, timeSec) {
+      if (!m || !m.pos) return;
+      const mx = sx(m.pos[0]);
+      const my = sy(m.pos[1]);
+  cons          ase = m.state === "          ;
+      const isRecoil = m.state === "recoil" || m.state === d";
 
-  // Góc hướng mặt
-  let angle = 0;
-  if (isChase && p && p.pos) {
-    angle = Math.atan2(p.pos[1] - m.pos[1], p.pos[0] - m.pos[0]);
-  } else if (m.waypoints && m.waypoints.length > 1) {
-    const tgt = m.waypoints[m.target_idx || 0] || m.waypoints[1];
-    angle = Math.atan2(tgt[1] - m.pos[1], tgt[0] - m.pos[0]);
-  }
+      // Góc hướng mặt
+      let angle = 0;
+      if (            && p && p.pos) {
+        angle = Math.atan2(p.pos[1] - m.pos[1], p.pos[0] - m.pos[0            else if (m.waypoints && m.waypoints.length > 1) {
+          const m.waypoints[m.target_i             || m.waypoints[1];
+          angle = Math.atan2(tgt[1] - m.pos[1], tgt[0] - m.pos[0]);
+        }
 
-  // Vẽ vòng cảnh báo đe dọa khi săn đuổi (chase)
-  if (isChase && !noFx) {
-    ctx.save();
-    const pulse = 1 + 0.08 * Math.sin(timeSec * 8);
-    ctx.strokeStyle = highContrast ? "#ff3333" : `rgba(255, 23, 68, ${0.35 + 0.2 * Math.sin(timeSec * 8)})`;
-    ctx.lineWidth = highContrast ? 2.5 : 1.8;
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    ctx.arc(mx, my, 1.8 * s * pulse, 0, Math.PI * 2);
-    ctx.stroke();
+        // Vẽ vòng cảnh bá          ọa         s       đuổi      chase)
+        if (isChase && noFx) {
+          ctx.save();
+          const pulse = 1 + 0.0 * Math.sin(timeSec);
+          ctx.strokeStyle = highContrast ? "#ff        " : `rgba(255, 23, 68, ${0.35 + 0.2 * Math.timeSec * 8)
+        })`;
+         tx.lineWidth = highContrast ? 2.5 : 1.8;
+          x.setLineDash([6, 4]);
+          x.beginPath();
+          x.arc(mx, my, 1.8 * s * pulse, 0, Math.PI *        
+    ctx.strok        
     ctx.restore();
-  }
+           ctx.save();
+        x.translate(mx, my);
 
-  ctx.save();
-  ctx.translate(mx, my);
-
-  // Hiệu ứng giật lùi (recoil / stunned)
+  //          ứng giật lùi (re         / stunned)
   if (isRecoil) {
-    ctx.globalAlpha = Math.floor(Date.now() / 90) % 2 === 0 ? 0.35 : 0.85;
+    ctx.globa        ha = Math.fl        Date.now() / 90) % 2 === 0 ?          : 0.85;
   }
 
-  ctx.rotate(angle);
+  ctx        ate(angle);
 
-  // Vẫy đuôi uyển chuyển theo nhịp bơi
-  const tailWag = Math.sin(timeSec * (isChase ? 12 : 5)) * 0.18;
+          ẫy đuôi uyển chuyển theo nhịp bơi
+        nst tailWag = Mat          timeSec * (isChase ? 12 : 5)) * 0.18;
 
   // Đuôi cá sấu
   ctx.save();
-  ctx.rotate(tailWag);
-  ctx.fillStyle = highContrast ? "#000000" : (isChase ? "#162e1a" : "#1a3820");
-  ctx.beginPath();
+  ctx.rotate(tailWag)          x.fillStyle = highContrast ? "#000000" : (isChase ? "#162e1a" : "#1a              ctx.beginPath();
   ctx.moveTo(-1.2 * s, -0.35 * s);
-  ctx.quadraticCurveTo(-2.1 * s, -0.15 * s, -2.7 * s, 0);
-  ctx.quadraticCurveTo(-2.1 * s, 0.15 * s, -1.2 * s, 0.35 * s);
-  ctx.closePath();
+  c          drat        rve        2.1 * s, -0.15 * s, -2.7 * s, 0);
+  ctx.quadraticCurveTo(-2.1          0.15 * s, -1.2 * s, 0.35 *           ctx.closePath();
   ctx.fill();
-  if (highContrast) {
-    ctx.strokeStyle = "#ff3333";
+  if (high        rast) {
+    ctx.strokeSty          #ff3333";
     ctx.lineWidth = 2;
     ctx.stroke();
   }
-  ctx.restore();
-
+  ctx.resto          
   // Thân cá sấu
-  const bodyGrad = ctx.createLinearGradient(-1.6 * s, 0, 1.6 * s, 0);
-  bodyGrad.addColorStop(0, "#132717");
-  bodyGrad.addColorStop(0.5, isChase ? "#2d5229" : "#224225");
+  const bodyGrad = ctx.createLinearGradient(-1.        s, 0,         * s, 0);
+  bodyGrad.addColo        p(0, "#132717");
+  bodyGrad.addColorStop(0.        sChase ? "#2d5229" : "#22          ;
   bodyGrad.addColorStop(1, "#17331a");
-  ctx.fillStyle = highContrast ? "#000000" : bodyGrad;
+  ctx.fillStyle = highCon          ? "#000000" : bodyGrad;
   ctx.beginPath();
-  ctx.ellipse(0, 0, 1.4 * s, 0.58 * s, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, 1.        s, 0.         s, 0, 0, Math.PI          
   ctx.fill();
-  if (highContrast) {
-    ctx.strokeStyle = isChase ? "#ff3333" : "#00ff00";
+  if (highContrast)             x.strokeStyle = isChase              3" : "#00ff00";
     ctx.lineWidth = 2.5;
     ctx.stroke();
   }
 
-  // Vảy gai nhọn dọc sống lưng
+  // Vảy gai nhọn              lưng
   ctx.fillStyle = isChase ? "#ff3d00" : (highContrast ? "#00ff00" : "#3e6939");
   for (let sp = -1.0; sp <= 0.8; sp += 0.35) {
-    ctx.beginPath();
-    ctx.moveTo(sp * s, -0.55 * s);
-    ctx.lineTo((sp + 0.16) * s, -0.85 * s);
+    ctx          Path();
+    ctx.moveTo(sp * s, -0.55 * s)            x.lineTo((sp + 0.16) * s, -0.85 * s);
     ctx.lineTo((sp + 0.32) * s, -0.55 * s);
     ctx.closePath();
-    ctx.fill();
+    ctx.          ;
   }
 
   // Đầu và mõm dài
-  ctx.fillStyle = highContrast ? "#000000" : (isChase ? "#254a22" : "#1e3d21");
+  ctx.fillStyle =            trast ? "#000000" : (isChase ? "#254a22" : "#1e3d21");
   ctx.beginPath();
   ctx.moveTo(0.8 * s, -0.45 * s);
   ctx.lineTo(2.3 * s, -0.22 * s);
-  ctx.lineTo(2.3 * s, 0.22 * s);
-  ctx.lineTo(0.8 * s, 0.45 * s);
+  ctx.line           *        0.22 * s);
+  ctx.lineTo(          s, 0.45 * s);
   ctx.closePath();
-  ctx.fill();
+          fill();
   if (highContrast) {
-    ctx.strokeStyle = isChase ? "#ff3333" : "#00ff00";
+                keStyle = isChase ? "#ff3333" : "#00ff00";
     ctx.lineWidth = 2.5;
     ctx.stroke();
   }
 
-  // Hàm răng nanh sắc nhọn
-  ctx.fillStyle = "#ffffff";
-  for (let t = 1.0; t <= 2.1; t += 0.28) {
+             răng nanh sắc nhọn
+  ctx.fillStyle = "#ff              or (let t = 1.0; t <= 2.1; t += 0.28) {
     ctx.beginPath();
     ctx.moveTo(t * s, -0.22 * s);
     ctx.lineTo((t + 0.12) * s, -0.05 * s);
-    ctx.lineTo((t + 0.24) * s, -0.22 * s);
-    ctx.fill();
+               eTo((t + 0.24) * s, -0.                 ctx.fill();
 
     ctx.beginPath();
     ctx.moveTo(t * s, 0.22 * s);
     ctx.lineTo((t + 0.12) * s, 0.05 * s);
-    ctx.lineTo((t + 0.24) * s, 0.22 * s);
-    ctx.fill();
+    ctx.lineTo((t + 0.24) * s             s);
+                  ;
   }
 
   // Mắt săn mồi
   const eyeColor = isChase ? "#ff1744" : isRecoil ? "#ffd54f" : "#ffca28";
   ctx.fillStyle = eyeColor;
-  ctx.beginPath();
-  ctx.arc(0.9 * s, -0.32 * s, 0.14 * s, 0, Math.PI * 2);
-  ctx.arc(0.9 * s, 0.32 * s, 0.14 * s, 0, Math.PI * 2);
+  ctx.beginPa            ct          0.9 * s, -0.32 * s, 0.14 * s, 0, Math.PI             ctx.arc(0.9 * s, 0.32 * s, 0.14 * s, 0, Math.PI * 2);
   ctx.fill();
 
   if (isChase && !highContrast) {
-    ctx.fillStyle = "rgba(255, 23, 68, 0.6)";
+    ctx.fi          e         gb      255      23, 68, 0.6)";
     ctx.beginPath();
-    ctx.arc(0.9 * s, -0.32 * s, 0.3 * s, 0, Math.PI * 2);
-    ctx.arc(0.9 * s, 0.32 * s, 0.3 * s, 0, Math.PI * 2);
+    ctx.arc(0.9       s, -0.32 * s, 0.3 * s, 0, Math.PI * 2);
+        ctx.arc(0.9 * s, 0.32 * s,      .3 * s, 0, Math.PI * 2);
     ctx.fill();
-  }
-
+        
   ctx.restore();
 
-  // Nhãn cảnh báo nổi bật: 🐊 THỦY QUÁI! (Ticket 03 Phase 4)
-  let tag = `🐊 Thủy quái (${m.id})`;
-  let tagColor = "#a5d6a7";
-  let tagBg = "rgba(10, 25, 15, 0.88)";
+  // Nhãn cảnh báo nổi bật: 🐊 THỦY QUÁI! (Ticket 0      Phase 4)
+  let      ag = `🐊 Thủy quái(${ m.id })`;
+  let tagColor       "#a5d6a7";
+  let tagBg = "rgba(10, 25, 1        .88)";
   let tagBorder = "#2e7d32";
 
   if (isChase) {
-    tag = `🚨 🐊 THỦY QUÁI TRUY ĐUỔI! [${m.id}]`;
-    tagColor = "#ff8a80";
-    tagBg = "rgba(50, 10, 15, 0.94)";
+    tag = `🚨 🐊 TH       QUÁI      RUY ĐUỔI![${ m.id }]`;
+    tagColor = "#ff      80";
+    tagBg = "rgba(50, 10, 1       0.94)";
     tagBorder = "#ff1744";
-  } else if (isRecoil) {
-    tag = `💫 Đẩy lùi (${Math.ceil((m.state_ticks_left || 0) / 60 * 10) / 10}s)`;
+  } else if       sRecoil) {
+    tag = `💫 Đẩy lùi      ${ Math.ceil((m.state_ticks_left || 0) / 60 * 10) / 10 }s)`;
     tagColor = "#ffd54f";
-    tagBg = "rgba(35, 30, 10, 0.92)";
+        tagBg = "rgba(35, 30, 10, 0.92)";
     tagBorder = "#ffa000";
   }
 
-  drawPrompt(tag, mx, my - 1.8 * s, {
+  drawPrompt(tag, mx,      y - 1.8 * s, {
     size: 10,
     color: tagColor,
     bg: tagBg,
-    border: tagBorder,
-    hcBorder: isChase ? "#ff3333" : "#ffffff",
+    border: tagBorde      
+    hcBorder: isChase ? "#ff3      3" : "#ffffff",
     hcColor: isChase ? "#ff3333" : "#ffffff"
   });
 }
 
-// ----- CẢNH GATHER: Buổi sáng -----
+// ----- CẢNH GATHER: B      i sáng -----
 function drawGather(w, h) {
   const meta = snap?.meta || {};
-  const b = meta.bounds || { x: [0, 100], d: [0, 30] };
+  const b = meta.      unds || { x: [0, 100], d: [0, 3        ;
   const X = b.x[1] || 100, D = b.d[1] || 30, SKY = 6;
-  const top = 68, bottom = 64;
-  const s = Math.max(1, Math.min((w - 24) / (X + 4), (h - top - bottom) / (D + SKY + 1)));
-  const ox = (w - s * (X + 4)) / 2 + 2 * s, oy = top + SKY * s;
-  const sx = (x) => ox + x * s, sy = (d) => oy + d * s;
+  const to      = 68,      ottom = 64;
+  const s = Math.max(1, Math.min((w - 24) / (X       4), (h - top - bot         / (D + SKY + 1)));
+  const ox = (w - s *          4)) / 2 + 2 * s, oy = top           * s;
+  const sx = (x) => o          * s, sy =         =>        +       * s;
 
   // Trời + nước
-  ctx.fillStyle = highContrast ? "#000000" : "#cfeaf5";
-  ctx.fillRect(0, top, w, SKY * s);
+  ctx.fillStyle = highContras      ? "#000000" : "#cfeaf5";
+  ctx.fillRect(0      top, w, SKY * s);
 
-  if (highContrast) {
-    ctx.fillStyle = "#091724";
-    ctx.fillRect(sx(0), oy, X * s, D * s);
+  if (highContrast) {         ctx.fillStyle = "#091724";
+    ctx.fillR      t(sx(0), oy, X * s, D * s);
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 2;
-    ctx.strokeRect(sx(0), oy, X * s, D * s);
+        ctx.strokeRect(sx(0), oy, X * s,       * s);
   } else {
-    const g = ctx.createLinearGradient(0, oy, 0, sy(D));
-    g.addColorStop(0, "#49b0dc");
-    g.addColorStop(0.3, "#21709e");
-    g.addColorStop(0.65, "#0f3e61");
+    const g = c      .createLinearGradient(0, oy, 0, sy(D));
+    g.addColorStop(0, "#49      dc");
+    g.addColorStop(0.3, "#21709e            g.addColorStop(0.65, "#0f3e61");
     g.addColorStop(1, "#051829");
-    ctx.fillStyle = g;
-    ctx.fillRect(sx(0), oy, X * s, D * s);
+           .fillStyle = g;
+    ctx.fil      ect(sx(0), oy, X * s, D * s);
 
     // Tia nắng chiếu xiên (Sunbeams / God rays)
     if (!noFx) {
-      ctx.save();
-      const timeSec = (snap?.tick || 0) / 60;
-      ctx.globalCompositeOperation = "screen";
+          ctx.save();
+          const timeSec = (snap?.tick || 0) / 60;
+      ctx.globalCompositeOperation = "        en";
       for (let r = 0; r < 4; r++) {
-        const rx = sx(15 + r * 22 + Math.sin(timeSec * 0.4 + r * 1.5) * 4);
-        const rg = ctx.createLinearGradient(rx, oy, rx + 50, sy(22));
-        rg.addColorStop(0, "rgba(200, 245, 255, 0.12)");
-        rg.addColorStop(0.4, "rgba(120, 215, 255, 0.05)");
-        rg.addColorStop(1, "rgba(40, 140, 200, 0)");
+                con    st rx = sx(15 + r * 22 + Math.sin(timeSec * 0.4 + r * 1.5) * 4);    
+        const rg = ctx.c      ateLinearGradie        x, oy, rx + 50, sy(22));
+        rg.addColorStop(0, "rgba(200, 245, 255, 0.12)");             rg.addColorStop(0.4, "rgba(120, 215, 255, 0.05)");
+              .add      lo      top(1, "rgba(40, 14        00, 0)");
         ctx.fillStyle = rg;
         ctx.beginPath();
-        ctx.moveTo(rx - 8, oy);
+        ctx.moveTo(r           oy);
         ctx.lineTo(rx + 30, oy);
-        ctx.lineTo(rx + 90, sy(22));
+        ctx.lineTo(rx        0, s      22)      
         ctx.lineTo(rx + 35, sy(22));
-        ctx.closePath();
-        ctx.fill();
-      }
-      ctx.restore();
+            ctx.closePath();
+            ctx.fill              }
+      ctx.        ore();
     }
   }
 
-  // Hiệu ứng sóng nước lăn tăn
-  ctx.strokeStyle = highContrast ? "#ffffff" : "rgba(233, 247, 255, 0.85)";
-  ctx.lineWidth = highContrast ? 3 : 2.5;
-  ctx.beginPath();
-  if (noFx || highContrast) {
-    ctx.moveTo(sx(0), oy);
-    ctx.lineTo(sx(X), oy);
+  // Hiệu ứng sóng nước         tăn
+  ctx.strokeStyle = hi        ntrast ? "#ffffff" : "rgba(233, 24        55, 0.85)";
+  ct        neWidth = highContrast ? 3 : 2.5;
+  ctx.begin        ();
+  if (noFx || highContrast) {         ctx.moveTo(sx(0), oy);
+    ctx.line        x(X), oy);
   } else {
-    const timeSec = (snap?.tick || 0) / 60;
+    const timeSec =         p?.tick || 0        60;
     for (let x = 0; x <= X; x += 2) {
-      const wy = oy + Math.sin(x * 0.4 + timeSec * 3) * 1.5;
-      if (x === 0) ctx.moveTo(sx(x), wy);
+             st wy = oy + Math.sin         0.4 + timeSec          * 1.5;
+      if (x =        ) ctx.moveTo(sx(x), wy);
       else ctx.lineTo(sx(x), wy);
     }
   }
-  ctx.stroke();
-
-  // Vạch độ sâu
-  for (let d = 5; d <= D; d += 5) {
-    ctx.strokeStyle = highContrast ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(sx(0), sy(d));
-    ctx.lineTo(sx(X), sy(d));
-    ctx.stroke();
-    text(d + " m", sx(0) + 4, sy(d) - 3, { size: 10, color: highContrast ? "#ffffff" : "rgba(255,255,255,0.4)" });
+  ctx.stroke();        // Vạch độ sâu
+  for (let d = 5; d <= D; d += 5            ctx.strokeStyle = highContrast ? "rgba(255,255,255,0.25)"         gba(2        55,255,0.08)";
+    ctx.lineWidth = 1;         ctx.beginPath();
+    ctx.moveTo(sx(0), sy        ;
+    ctx.lineTo(sx(X), sy(d)           ctx.stroke();
+    text(d + "           (0) + 4, sy(d) - 3, { size: 10, color: highContrast ? "#ffffff" : "rgba(255          55,0.4)" });
   }
 
-  // Vẽ bọt khí lặn (VFX)
+  // Vẽ         khí lặn (VFX)
   if (!noFx) {
-    ctx.save();
+    ctx          );
     bubbles.forEach((bb) => {
-      ctx.strokeStyle = `rgba(255, 255, 255, ${bb.alpha})`;
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = `rgba(255, 255, 255, lpha})`;
+      ctx.lineWi        = 1;
       ctx.beginPath();
-      ctx.arc(sx(bb.x), sy(bb.d), bb.r, 0, Math.PI * 2);
+      ctx.ar          b.x), sy(bb.d), bb.r, 0, Math.PI * 2);
       ctx.stroke();
     });
-    ctx.restore();
+    ctx.rest          
   }
 
-  // Bến tàu (Dock)
-  const dp = meta.dock_pos || [2, 0], dr = meta.dock_radius || 3;
-  ctx.fillStyle = "#8d6e4b";
-  ctx.fillRect(sx(dp[0] - 1.5), sy(-0.7), 3 * s, 0.9 * s);
+  // Bến tàu (Dock)        onst dp = meta.dock_pos ||          ], dr = meta.dock_radius || 3;
+  ctx.f        ty         "#8d6e4b";
+  ctx.fillRect(sx(dp[0]          ), sy(-0.7), 3 * s, 0.9 * s);
   ctx.fillStyle = "#b9503a";
+  c        eginP        );
+  ctx.moveTo(sx(dp        - 1.8), sy(-0.7));
+  ctx.lineTo(sx(dp[0]), sy(-2.4))        ctx.lineTo(sx(dp[0] + 1.8), sy(-0.7));
+  ctx.        ();
+  ctx.str        tyle = "rgba(255, 230, 150, 0.           ctx.setLineDash([5, 4]);
   ctx.beginPath();
-  ctx.moveTo(sx(dp[0] - 1.8), sy(-0.7));
-  ctx.lineTo(sx(dp[0]), sy(-2.4));
-  ctx.lineTo(sx(dp[0] + 1.8), sy(-0.7));
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255, 230, 150, 0.6)";
-  ctx.setLineDash([5, 4]);
-  ctx.beginPath();
-  ctx.arc(sx(dp[0]), sy(dp[1]), dr * s, 0, Math.PI * 2);
-  ctx.stroke();
+  ctx.a          dp[0]), sy(dp[1]), dr * s, 0, Math.PI * 2)          x.stroke();
   ctx.setLineDash([]);
-  text("⚓ Bến tàu", sx(dp[0]), sy(-2.7), { size: 11, align: "center", weight: "bold", color: "#5a3a22" });
+  text("⚓ Bến tàu", sx(dp[0]), sy(-2.7), { size: 11, align: "center", weight: "           color: "#5a3a22" });
 
   // Nút hái rau
   const p = snap?.player;
   const nodes = snap?.nodes || [];
-  nodes.forEach((n) => {
+  nodes          ch((n) => {
     const ready = n.ready !== false;
     ctx.globalAlpha = ready ? 1 : 0.35;
-    ctx.fillStyle = kc(n.kind);
-    ctx.beginPath();
+    ctx.fillStyle = kc(n.        );
+    ct          nPath();
     ctx.ellipse(sx(n.pos[0]), sy(n.pos[1]) - 0.1 * s, 0.9 * s, 0.45 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.          ;
     ctx.globalAlpha = 1;
-    text(KIND_NAME[n.kind] || n.id, sx(n.pos[0]), sy(n.pos[1]) - 0.8 * s, { size: 10, align: "center", weight: "bold", color: "#234" });
+    text(KIND_NAME[n.kind] || n.id, sx(n.pos[0]), sy(n.pos[1]) - 0.8 * s, { size: 10, align: "center", weig          old", color: "#234" });
     if (!ready && n.regrow_ticks) {
-      text("🌱 " + Math.ceil(n.regrow_ticks / 60) + "s", sx(n.pos[0]), sy(n.pos[1]) + 1.1 * s, { size: 10, align: "center", color: "#fff" });
+      text("🌱 " + Math.ceil(n.regrow_ticks / 60) + "s", sx(        s[0        sy(n.pos[1]) + 1.1 * s, { size: 10, align: "center", c        : "#fff" });
     }
   });
-
-  // Đàn cá
-  const fishList = snap?.fish || [];
-  fishList.forEach((f) => {
+        / Đàn cá
+  const fishList = snap?.fish || []        fishList.forEach((f) => {
     ctx.save();
-    ctx.translate(sx(f.pos[0]), sy(f.pos[1]));
-    ctx.rotate(((f.heading_deg || 0) * Math.PI) / 180);
-    ctx.fillStyle = highContrast ? "#00ffff" : kc(f.kind);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 0.9 * s, 0.45 * s, 0, 0, Math.PI * 2);
+    ctx.        slate(sx(f.pos[0]), sy(f.pos[1]));
+        ctx.rotate(((f.heading_deg         ) * Math.PI)        80);
+    ctx.fillStyle = high        rast ? "#00ffff" : kc        ind);
+    ctx.b        Path();
+    ctx.ellipse(0, 0, 0.9 * s, 0.45 * s, 0,          th.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(-0.8 * s, 0);
-    ctx.lineTo(-1.4 * s, -0.4 * s);
-    ctx.lineTo(-1.4 * s, 0.4 * s);
-    ctx.fill();
-    if (highContrast) {
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+    ctx.moveTo(-0.8 * s, 0)          ctx        eTo(-1.4 * s, -      4 * s);
+         tx.lineTo(-1.4 * s, 0.4       s    );
+        ctx.fill();
+    if (highCo    ntrast) {
+      ctx      trokeStyle = "#ffffff";
+            x.lineWidth = 1.5;
+          ctx.stroke();
     }
-    ctx.restore();
-    text(KIND_NAME[f.kind] || f.id, sx(f.pos[0]), sy(f.pos[1]) - 0.8 * s, {
-      size: 10, align: "center", color: highContrast ? "#ffffff" : "rgba(255,255,255,0.85)", stroke: highContrast
+    ct      restore();
+    text(KIND_NE      .kind] || f.        sx(f.pos[0]), sy(f.pos[1]) - 0.8 * s, {
+          size: 10, align: "cente        color: highContr        ? "#ffffff" : "      ba(255,25        5,0.85)", stroke: highContrast
     });
   });
 
-  // Quái vật Thủy quái Cá Sấu (PRD P2 §1.2 & Ticket 03 Phase 4)
-  const monsterList = snap?.monsters || [];
-  const timeSec = (snap?.tick || 0) / 60;
-  monsterList.forEach((m) => {
+  // Quái vật Thủy quái Cá Sấu (PRD P2 §1.2 & T          03 Phase 4)
+  const monsterList = snap?.mons         ||       ;
+          const timeSec = (snap?.tick || 0)  monsterList.forEach((m) => {
     drawCrocodile(m, sx, sy, s, p, timeSec);
   });
 
@@ -1027,14 +966,14 @@ function drawGather(w, h) {
       contextualPrompt = { text: "⚓ Nhấn [E] CẬP BẾN & CHỐT KHO", color: "#ffd54f", border: "#ffca28" };
     } else if (isMonsterThreat) {
       contextualPrompt = {
-        text: `🚨 🐊 THỦY QUÁI! CÁ SẤU ÁP SÁT (${minMDist.toFixed(1)}m) — BƠI LÊN ĐỘ SÂU < 10M!`,
+        text: `🚨 🐊 THỦY QUÁI! CÁ SẤU ÁP SÁT(${ minMDist.toFixed(1) }m) — BƠI LÊN ĐỘ SÂU < 10M!`,
         color: "#ffffff",
         border: highContrast ? "#ffff00" : "#ff1744",
         bg: highContrast ? "#000000" : "rgba(60, 10, 15, 0.95)"
       };
     } else if (isLowOxy) {
       contextualPrompt = {
-        text: `🫁 HẾT HƠI (${Math.ceil(p.oxygen_ticks / 60)}s)! NỔI LÊN MẶT NƯỚC NGAY!`,
+        text: `🫁 HẾT HƠI(${ Math.ceil(p.oxygen_ticks / 60) }s)! NỔI LÊN MẶT NƯỚC NGAY!`,
         color: "#ffffff",
         border: highContrast ? "#ffff00" : "#ff1744",
         bg: highContrast ? "#000000" : "rgba(60, 10, 10, 0.95)"
@@ -1050,9 +989,9 @@ function drawGather(w, h) {
         if (isHoldFull) {
           contextualPrompt = { text: "⚠️ Giỏ hàng đã đầy! Hãy về bến [E]", color: "#ff8a80", border: "#ff5252" };
         } else if (nearestNode.ready !== false) {
-          contextualPrompt = { text: `🌿 Nhấn [E] Hái ${KIND_NAME[nearestNode.kind] || nearestNode.kind}`, color: "#ffffff", border: "#69f0ae" };
+          contextualPrompt = { text: `🌿 Nhấn[E] Hái ${ KIND_NAME[nearestNode.kind] || nearestNode.kind } `, color: "#ffffff", border: "#69f0ae" };
         } else if (nearestNode.regrow_ticks) {
-          contextualPrompt = { text: `🌱 ${KIND_NAME[nearestNode.kind]} đang mọc (${Math.ceil(nearestNode.regrow_ticks / 60)}s)`, color: "#b0bec5", border: "#78909c" };
+          contextualPrompt = { text: `🌱 ${ KIND_NAME[nearestNode.kind] } đang mọc(${ Math.ceil(nearestNode.regrow_ticks / 60) }s)`, color: "#b0bec5", border: "#78909c" };
         }
       }
     } else {
@@ -1064,11 +1003,11 @@ function drawGather(w, h) {
       });
       if (nearestFish) {
         if (p.catch_cd_ticks > 0) {
-          contextualPrompt = { text: `⏳ Hồi chiêu bắt: ${(p.catch_cd_ticks / 60).toFixed(1)}s`, color: "#ffb74d", border: "#ffa726" };
+          contextualPrompt = { text: `⏳ Hồi chiêu bắt: ${ (p.catch_cd_ticks / 60).toFixed(1) } s`, color: "#ffb74d", border: "#ffa726" };
         } else if (isHoldFull) {
           contextualPrompt = { text: "⚠️ Giỏ đầy! Nổi lên về bến chốt kho", color: "#ff8a80", border: "#ff5252" };
         } else {
-          contextualPrompt = { text: `🐟 Nhấn [Space] Bắt đàn ${KIND_NAME[nearestFish.kind] || nearestFish.kind}`, color: "#ffffff", border: "#40c4ff" };
+          contextualPrompt = { text: `🐟 Nhấn[Space] Bắt đàn ${ KIND_NAME[nearestFish.kind] || nearestFish.kind } `, color: "#ffffff", border: "#40c4ff" };
         }
       }
     }
@@ -1089,7 +1028,7 @@ function drawGather(w, h) {
 
   // 2. Tọa độ
   if (p && p.pos) {
-    text(`x: ${p.pos[0].toFixed(1)}m · d: ${p.pos[1].toFixed(1)}m`, 120, 34, { size: 12, color: "#9fb3c0" });
+    text(`x: ${ p.pos[0].toFixed(1) } m · d: ${ p.pos[1].toFixed(1) } m`, 120, 34, { size: 12, color: "#9fb3c0" });
   }
 
   // 3. Thanh Oxy — Nhấp nháy nhanh dần khi gần 0 (Ticket 03 Phase 4)
@@ -1106,7 +1045,7 @@ function drawGather(w, h) {
     let oxyLabel = "Oxy: " + Math.ceil(p.oxygen_ticks / 60) + "s";
     if (isOxyLow) {
       oxyColor = blink ? "#ff1744" : (highContrast ? "#ffff00" : "#ff8a80");
-      oxyLabel = `🫁 HẾT HƠI: ${Math.ceil(p.oxygen_ticks / 60)}s!`;
+      oxyLabel = `🫁 HẾT HƠI: ${ Math.ceil(p.oxygen_ticks / 60) } s!`;
     } else if (isOxyMed) {
       oxyColor = "#ffa726";
     }
@@ -1215,9 +1154,9 @@ function drawGather(w, h) {
     }
 
     const summary = Object.keys(counts).map((k) => (KIND_NAME[k] || k) + " ×" + counts[k]).join(" · ");
-    let giỏLabel = `Giỏ (${holdItems.length}/${cap})` + (summary ? `: ${summary}` : " (Đang trống)");
+    let giỏLabel = `Giỏ(${ holdItems.length } / ${ cap })` + (summary ? `: ${ summary } ` : " (Đang trống)");
     if (spoiledCount > 0) {
-      giỏLabel += ` · ⚠️ Có ${spoiledCount} món đã ươn!`;
+      giỏLabel += ` · ⚠️ Có ${ spoiledCount } món đã ươn!`;
     }
     text(giỏLabel, 16, h - bottom + sz + 23, { size: 12, color: spoiledCount > 0 ? "#ff8a80" : "#cfd8dc", weight: "bold" });
   }
@@ -1298,7 +1237,7 @@ function drawQuan(w, h) {
   if (!noFx && !highContrast) {
     ctx.save();
     steams.forEach((sm) => {
-      ctx.fillStyle = `rgba(240, 240, 245, ${sm.alpha * 0.45})`;
+      ctx.fillStyle = `rgba(240, 240, 245, ${ sm.alpha * 0.45 })`;
       ctx.beginPath();
       ctx.arc(sx(sm.x), sy(sm.z), sm.r, 0, Math.PI * 2);
       ctx.fill();
@@ -1373,7 +1312,7 @@ function drawQuan(w, h) {
           ctx.restore();
 
           // Nhãn chữ + biểu tượng rõ ràng
-          text(`😡 KHÁCH SẮP GIẬN! (${secLeft}s)`, cx, cy - 1.45 * s, {
+          text(`😡 KHÁCH SẮP GIẬN!(${ secLeft }s)`, cx, cy - 1.45 * s, {
             size: 11,
             align: "center",
             weight: "bold",
@@ -1383,7 +1322,7 @@ function drawQuan(w, h) {
           });
 
           if (!urgentCustomerBanner) {
-            urgentCustomerBanner = `Bàn ${tb.id}: 😡 KHÁCH SẮP GIẬN (${secLeft}s)!`;
+            urgentCustomerBanner = `Bàn ${ tb.id }: 😡 KHÁCH SẮP GIẬN(${ secLeft }s)!`;
           }
         }
       } else if (isEating) {
@@ -1438,25 +1377,25 @@ function drawQuan(w, h) {
       if (nearStove.state === "ready") {
         quanPrompt = snap.hand
           ? { text: "⚠️ Tay đang bận cầm món khác!", color: "#ff8a80", border: "#ff5252" }
-          : { text: `🍲 Nhấn [E] Bưng ${DISH_NAME[nearStove.dish] || nearStove.dish} từ Bếp ${nearStove.id}`, color: "#69f0ae", border: "#00e676" };
+          : { text: `🍲 Nhấn[E] Bưng ${ DISH_NAME[nearStove.dish] || nearStove.dish } từ Bếp ${ nearStove.id } `, color: "#69f0ae", border: "#00e676" };
       } else if (nearStove.state === "idle") {
-        quanPrompt = { text: `🍳 Nhấn [E] Bắt đầu nấu tại Bếp ${nearStove.id}`, color: "#ffffff", border: "#ffca28" };
+        quanPrompt = { text: `🍳 Nhấn[E] Bắt đầu nấu tại Bếp ${ nearStove.id } `, color: "#ffffff", border: "#ffca28" };
       } else if (nearStove.state === "cooking") {
-        quanPrompt = { text: `⏳ Bếp ${nearStove.id} đang nấu... (${Math.ceil((nearStove.cook_ticks_left || 0) / 60)}s)`, color: "#ffb74d", border: "#ffa726" };
+        quanPrompt = { text: `⏳ Bếp ${ nearStove.id } đang nấu... (${ Math.ceil((nearStove.cook_ticks_left || 0) / 60) }s)`, color: "#ffb74d", border: "#ffa726" };
       }
     } else if (nearTable) {
       const c = byTable[nearTable.id];
       if (c && c.state === "waiting") {
         const handDish = typeof snap.hand === "string" ? snap.hand : (snap.hand?.dish_id || null);
         if (handDish && handDish === c.dish_id) {
-          quanPrompt = { text: `✨ Nhấn [E] Phục vụ Bàn ${nearTable.id} (${DISH_NAME[c.dish_id] || c.dish_id})`, color: "#69f0ae", border: "#00e676" };
+          quanPrompt = { text: `✨ Nhấn[E] Phục vụ Bàn ${ nearTable.id } (${ DISH_NAME[c.dish_id] || c.dish_id })`, color: "#69f0ae", border: "#00e676" };
         } else if (handDish) {
-          quanPrompt = { text: `⚠️ Món trên tay không đúng! (Khách gọi: ${DISH_NAME[c.dish_id] || c.dish_id})`, color: "#ff8a80", border: "#ff5252" };
+          quanPrompt = { text: `⚠️ Món trên tay không đúng!(Khách gọi: ${ DISH_NAME[c.dish_id] || c.dish_id })`, color: "#ff8a80", border: "#ff5252" };
         } else {
-          quanPrompt = { text: `Khách Bàn ${nearTable.id} đang đợi món: ${DISH_NAME[c.dish_id] || c.dish_id}`, color: "#ffd54f", border: "#ffca28" };
+          quanPrompt = { text: `Khách Bàn ${ nearTable.id } đang đợi món: ${ DISH_NAME[c.dish_id] || c.dish_id } `, color: "#ffd54f", border: "#ffca28" };
         }
       } else if (c && c.state === "eating") {
-        quanPrompt = { text: `Bàn ${nearTable.id}: Khách đang thưởng thức món ăn`, color: "#b0bec5", border: "#78909c" };
+        quanPrompt = { text: `Bàn ${ nearTable.id }: Khách đang thưởng thức món ăn`, color: "#b0bec5", border: "#78909c" };
       }
     }
   }
@@ -1469,24 +1408,164 @@ function drawQuan(w, h) {
   ctx.beginPath(); ctx.moveTo(0, 56); ctx.lineTo(w, 56); ctx.stroke();
 
   const timeLeft = snap?.time_left_ticks ?? 0;
-  text("⏱ " + fmtTime(timeLeft), 16, 36, {
+  const dayStr = snap?.day ? ` · 📅 Ngày ${snap.day}` : "";
+  text("⏱ " + fmtTime(timeLeft) + dayStr, 16, 36, {
     size: 20, weight: "bold", color: timeLeft < 1800 ? "#ff5252" : "#e8eef2"
   });
 
   const money = snap?.money ?? 0;
   const rep = (snap?.reputation ?? 0).toFixed(1);
   const score = snap?.score ?? 0;
-  text(`💰 Tiền: ${money}k`, 120, 35, { size: 15, weight: "bold", color: highContrast ? "#ffff00" : "#ffd54f" });
-  text(`⭐ Uy tín: ${rep} / 5.0`, 240, 35, { size: 15, weight: "bold", color: highContrast ? "#00ffff" : "#81d4fa" });
-  text(`🏆 Điểm: ${score}`, 380, 35, { size: 15, weight: "bold", color: highContrast ? "#00ff66" : "#a5d6a7" });
+  const mX = snap?.day ? 190 : 120;
+  text(`💰 Tiền: ${money}k`, mX, 35, { size: 15, weight: "bold", color: highContrast ? "#ffff00" : "#ffd54f" });
+  text(`⭐ Uy tín: ${rep} / 5.0`, mX + 110, 35, { size: 15, weight: "bold", color: highContrast ? "#00ffff" : "#81d4fa" });
+  text(`🏆 Điểm: ${score}`, mX + 240, 35, { size: 15, weight: "bold", color: highContrast ? "#00ff66" : "#a5d6a7" });
 
-  const handDish = typeof snap?.hand === "string" ? snap.hand : (snap?.hand?.dish_id || null);
-  const handLabel = handDish ? `🍲 Tay: ${DISH_NAME[handDish] || handDish}` : "✋ Tay trống";
-  text(handLabel, w - 380, 35, {
-    size: 14, weight: "bold", color: handDish ? (highContrast ? "#00ff66" : "#69f0ae") : "#b0bec5"
+      const handDish = typeof snap?.hand === "string" ? snap.hand : (snap?.hand?.dish_id || null);
+      const handLabel = handDish ? `🍲 Tay: ${DISH_NAME[handDish] || handDish}` : "✋ Tay trống";
+      text(handLabel, w - 380, 35, {
+        size: 14, weight: "bold", color: handDish ? (highContrast ? "#00ff66" : "#69f0ae") : "#b0bec5"
+      });
+
+      // Nút Chế độ tương phản cao
+      contrastBtnRect = { x: w - 240, y: 14, w: 122, h: 28 };
+      roundRect(ctx, contrastBtnRect.x, contrastBtnRect.y, contrastBtnRect.w, contrastBtnRect.h, 6);
+      ctx.fillStyle = highContrast ? "#ffffff" : "rgba(255, 255, 255, 0.08)";
+      ctx.fill();
+      ctx.strokeStyle = highContrast ? "#ffffff" : "rgba(255, 255, 255, 0.25)";
+      ctx.stroke();
+      text(highContrast ? "👁️ Tương phản: BẬT" : "👁️ Tương phản (C)", contrastBtnRect.x + contrastBtnRect.w / 2, contrastBtnRect.y + contrastBtnRect.h / 2, {
+        size: 11, align: "center", base: "middle", weight: "bold", color: highContrast ? "#000000" : "#cfd8dc"
+      });
+
+      // Nút Âm thanh
+      soundBtnRect = { x: w - 110, y: 14, w: 96, h: 28 };
+      roundRect(ctx, soundBtnRect.x, soundBtnRect.y, soundBtnRect.w, soundBtnRect.h, 6);
+      ctx.fillStyle = soundEnabled ? (highContrast ? "#00ffff" : "rgba(41, 182, 246, 0.25)") : "rgba(255, 255, 255, 0.08)";
+      ctx.fill();
+      ctx.strokeStyle = soundEnabled ? (highContrast ? "#ffffff" : "#29b6f6") : "rgba(255, 255, 255, 0.25)";
+      ctx.stroke();
+      text(soundEnabled ? "🔊 Bật (M)" : "🔇 Tắt (M)", soundBtnRect.x + soundBtnRect.w / 2, soundBtnRect.y + soundBtnRect.h / 2, {
+        size: 11, align: "center", base: "middle", weight: "bold", color: soundEnabled ? (highContrast ? "#000000" : "#81d4fa") : "#9fb3c0"
+      });
+
+      // Banner Khách Sắp Giận trên HUD
+      if (urgentCustomerBanner) {
+        const bannerBlink = Math.floor(Date.now() / 250) % 2 === 0;
+        const bw = 360, bh = 30;
+        const bx = (w - bw) / 2, by = 64;
+        roundRect(ctx, bx, by, bw, bh, 6);
+        ctx.fillStyle = bannerBlink ? "rgba(183, 28, 28, 0.95)" : "rgba(255, 23, 68, 0.95)";
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        text("⚠️ " + urgentCustomerBanner, w / 2, by + bh / 2, {
+          size: 13, align: "center", base: "middle", weight: "bold", color: "#ffffff", stroke: true
+        });
+      }
+
+  // Bảng thực đơn tối theo kế hoạch ngày của Má Tư (Ticket 06 Phase 2)
+  if (snap?.day_plan && snap.day_plan.dishes) {
+    const pDishes = snap.day_plan.dishes;
+    const dKeys = Object.keys(pDishes);
+    if (dKeys.length > 0) {
+      const pw = 240, ph = 24 + dKeys.length * 20;
+      const px = 16, py = 64;
+      roundRect(ctx, px, py, pw, ph, 6);
+      ctx.fillStyle = highContrast ? "#000000" : "rgba(12, 20, 28, 0.88)";
+      ctx.fill();
+      ctx.strokeStyle = highContrast ? "#ffffff" : "rgba(255, 255, 255, 0.2)";
+      ctx.lineWidth = highContrast ? 2 : 1;
+      ctx.stroke();
+
+      text(`📋 THỰC ĐƠN TỐI (NGÀY ${snap.day || 1})`, px + 10, py + 16, {
+        size: 11, weight: "bold", color: highContrast ? "#ffff00" : "#ffd54f"
+      });
+      dKeys.forEach((dId, idx) => {
+        const count = pDishes[dId];
+        const icon = DISH_ICON[dId] || "🍲";
+        const dName = DISH_NAME[dId] || dId;
+        text(`${icon} ${dName}: ${count} suất`, px + 12, py + 34 + idx * 20, {
+          size: 11, color: highContrast ? "#ffffff" : "#e0e0e0"
+        });
+      });
+    }
+  }
+
+      if (quanPrompt) {
+        drawPrompt(quanPrompt.text, w / 2, urgentCustomerBanner ? 104 : 92, {
+          color: quanPrompt.color,
+          border: quanPrompt.border,
+          size: 13
+        });
+      }
+
+      // ===== HUD DƯỚI: Kho hàng nguyên liệu & hàng ươn (Ticket 05 Phase 3) =====
+      ctx.fillStyle = highContrast ? "#000000" : "rgba(12, 20, 28, 0.9)";
+      ctx.fillRect(0, h - bottom, w, bottom);
+      ctx.strokeStyle = highContrast ? "#ffffff" : "rgba(255,255,255,0.1)";
+      ctx.lineWidth = highContrast ? 2.5 : 1;
+      ctx.beginPath(); ctx.moveTo(0, h - bottom); ctx.lineTo(w, h - bottom); ctx.stroke();
+
+      let stockStr = "";
+      if (Array.isArray(snap?.stock)) {
+        const freshItems = snap.stock.filter((it) => it.fresh === undefined || it.fresh >= 30);
+        const spoiledItems = snap.stock.filter((it) => it.fresh !== undefined && it.fresh < 30);
+        const freshCounts = {};
+        freshItems.forEach((it) => (freshCounts[it.kind] = (freshCounts[it.kind] || 0) + 1));
+        const freshPart = Object.keys(freshCounts).map((k) => (KIND_NAME[k] || k) + " ×" + freshCounts[k]).join(" · ");
+        stockStr = freshPart || "(Hết nguyên liệu tươi)";
+        if (spoiledItems.length > 0) {
+          stockStr += ` | ⚠️ ${spoiledItems.length} hàng ươn (không thể dùng)`;
+        }
+      } else if (typeof snap?.stock === "object" && snap.stock !== null) {
+        const stockKeys = Object.keys(snap.stock).filter((k) => snap.stock[k] > 0);
+        stockStr = stockKeys.length > 0
+          ? stockKeys.map((k) => (KIND_NAME[k] || k) + " ×" + snap.stock[k]).join(" · ")
+          : "(Kho hết nguyên liệu)";
+      } else {
+        stockStr = "(Kho trống)";
+      }
+      text("📦 Kho dự trữ: " + stockStr, 16, h - 24, { size: 13, color: "#ffffff", weight: "bold" });
+
+      text("WASD: Đi lại · E: Tương tác (Bếp / Bàn) · C: Tương phản · R: Chơi lại", w - 16, h - 24, {
+        size: 12, align: "right", color: "#9fb3c0"
+      });
+    }
+
+  text("WASD: Đi lại · E: Tương tác (Bếp / Bàn) · C: Tương phản · P: Tạm dừng · R: Chơi lại", w - 16, h - 24, {
+    size: 12, align: "right", color: "#9fb3c0"
+  });
+}
+
+// ----- CẢNH SHOP: Cửa hàng ban đêm (Ticket 05 / 06 Phase 2) -----
+function drawShop(w, h) {
+  shopBtnRects = [];
+
+  ctx.fillStyle = highContrast ? "#000000" : "#0c1724";
+  ctx.fillRect(0, 0, w, h);
+
+  // HUD Trên của Shop
+  ctx.fillStyle = highContrast ? "#000000" : "rgba(12, 20, 28, 0.88)";
+  ctx.fillRect(0, 0, w, 56);
+  ctx.strokeStyle = highContrast ? "#ffffff" : "rgba(255,255,255,0.1)";
+  ctx.lineWidth = highContrast ? 2.5 : 1;
+  ctx.beginPath(); ctx.moveTo(0, 56); ctx.lineTo(w, 56); ctx.stroke();
+
+  const timeLeft = snap?.time_left_ticks ?? 0;
+  const secLeft = Math.ceil(timeLeft / 60);
+  text(`🏪 TIỆM TẠP HÓA ĐÊM (NGÀY ${snap?.day || 1})`, 16, 36, {
+    size: 18, weight: "bold", color: highContrast ? "#ffff00" : "#ffd54f"
+  });
+  text(`⏱ Đóng sau: ${secLeft}s`, 320, 36, {
+    size: 15, weight: "bold", color: secLeft <= 3 ? "#ff1744" : "#e8eef2"
+  });
+  text(`💰 Tiền hiện có: ${snap?.money ?? 0}k`, 480, 36, {
+    size: 16, weight: "bold", color: highContrast ? "#00ff66" : "#ffd54f"
   });
 
-  // Nút Chế độ tương phản cao
+  // Nút Tương phản
   contrastBtnRect = { x: w - 240, y: 14, w: 122, h: 28 };
   roundRect(ctx, contrastBtnRect.x, contrastBtnRect.y, contrastBtnRect.w, contrastBtnRect.h, 6);
   ctx.fillStyle = highContrast ? "#ffffff" : "rgba(255, 255, 255, 0.08)";
@@ -1508,104 +1587,267 @@ function drawQuan(w, h) {
     size: 11, align: "center", base: "middle", weight: "bold", color: soundEnabled ? (highContrast ? "#000000" : "#81d4fa") : "#9fb3c0"
   });
 
-  // Banner Khách Sắp Giận trên HUD
-  if (urgentCustomerBanner) {
-    const bannerBlink = Math.floor(Date.now() / 250) % 2 === 0;
-    const bw = 360, bh = 30;
-    const bx = (w - bw) / 2, by = 64;
-    roundRect(ctx, bx, by, bw, bh, 6);
-    ctx.fillStyle = bannerBlink ? "rgba(183, 28, 28, 0.95)" : "rgba(255, 23, 68, 0.95)";
-    ctx.fill();
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    text("⚠️ " + urgentCustomerBanner, w / 2, by + bh / 2, {
-      size: 13, align: "center", base: "middle", weight: "bold", color: "#ffffff", stroke: true
-    });
-  }
+  // Thân Shop
+  const mw = Math.min(800, w - 40);
+  const mh = Math.min(460, h - 130);
+  const mx = (w - mw) / 2, my = 75;
 
-  if (quanPrompt) {
-    drawPrompt(quanPrompt.text, w / 2, urgentCustomerBanner ? 104 : 92, {
-      color: quanPrompt.color,
-      border: quanPrompt.border,
-      size: 13
-    });
-  }
+  roundRect(ctx, mx, my, mw, mh, 12);
+  ctx.fillStyle = highContrast ? "#000000" : "rgba(16, 26, 38, 0.95)";
+  ctx.fill();
+  ctx.strokeStyle = highContrast ? "#ffffff" : "rgba(255, 255, 255, 0.2)";
+  ctx.lineWidth = highContrast ? 2.5 : 1.5;
+  ctx.stroke();
 
-  // ===== HUD DƯỚI: Kho hàng nguyên liệu & hàng ươn (Ticket 05 Phase 3) =====
-  ctx.fillStyle = highContrast ? "#000000" : "rgba(12, 20, 28, 0.9)";
-  ctx.fillRect(0, h - bottom, w, bottom);
-  ctx.strokeStyle = highContrast ? "#ffffff" : "rgba(255,255,255,0.1)";
-  ctx.lineWidth = highContrast ? 2.5 : 1;
-  ctx.beginPath(); ctx.moveTo(0, h - bottom); ctx.lineTo(w, h - bottom); ctx.stroke();
+  text("TRANG BỊ NÂNG CẤP CHO ÚT SEN", w / 2, my + 34, {
+    size: 18, weight: "bold", align: "center", color: highContrast ? "#ffffff" : "#e0e0e0"
+  });
+  text("Nâng cấp sẽ có hiệu lực từ buổi sáng Ngày kế tiếp", w / 2, my + 56, {
+    size: 12, align: "center", color: "#9fb3c0"
+  });
 
-  let stockStr = "";
-  if (Array.isArray(snap?.stock)) {
-    const freshItems = snap.stock.filter((it) => it.fresh === undefined || it.fresh >= 30);
-    const spoiledItems = snap.stock.filter((it) => it.fresh !== undefined && it.fresh < 30);
-    const freshCounts = {};
-    freshItems.forEach((it) => (freshCounts[it.kind] = (freshCounts[it.kind] || 0) + 1));
-    const freshPart = Object.keys(freshCounts).map((k) => (KIND_NAME[k] || k) + " ×" + freshCounts[k]).join(" · ");
-    stockStr = freshPart || "(Hết nguyên liệu tươi)";
-    if (spoiledItems.length > 0) {
-      stockStr += ` | ⚠️ ${spoiledItems.length} hàng ươn (không thể dùng)`;
+  const catalog = [
+    {
+      key: "oxygen",
+      keyNum: "1",
+      name: "Bình Lặn Khí Oxy",
+      icon: "🤿",
+      levels: [
+        { level: 1, price: 200, desc: "Tăng oxy lên 45 giây (+15s)" },
+        { level: 2, price: 400, desc: "Tăng oxy lên 60 giây (+30s)" }
+      ]
+    },
+    {
+      key: "hp",
+      keyNum: "2",
+      name: "Áo Phao Cứu Sinh (Máu)",
+      icon: "🦺",
+      levels: [
+        { level: 1, price: 250, desc: "Tăng Máu tối đa lên 4 ♥ (+1)" },
+        { level: 2, price: 500, desc: "Tăng Máu tối đa lên 5 ♥ (+2)" }
+      ]
+    },
+    {
+      key: "net",
+      keyNum: "3",
+      name: "Vợt Cá Cải Tiến",
+      icon: "🕸️",
+      levels: [
+        { level: 1, price: 250, desc: "Bán kính 4.0m, bắt 2 đàn/lần" },
+        { level: 2, price: 500, desc: "Bán kính 6.0m, bắt 3 đàn/lần" }
+      ]
     }
-  } else if (typeof snap?.stock === "object" && snap.stock !== null) {
-    const stockKeys = Object.keys(snap.stock).filter((k) => snap.stock[k] > 0);
-    stockStr = stockKeys.length > 0
-      ? stockKeys.map((k) => (KIND_NAME[k] || k) + " ×" + snap.stock[k]).join(" · ")
-      : "(Kho hết nguyên liệu)";
-  } else {
-    stockStr = "(Kho trống)";
-  }
-  text("📦 Kho dự trữ: " + stockStr, 16, h - 24, { size: 13, color: "#ffffff", weight: "bold" });
+  ];
 
-  text("WASD: Đi lại · E: Tương tác (Bếp / Bàn) · C: Tương phản · R: Chơi lại", w - 16, h - 24, {
-    size: 12, align: "right", color: "#9fb3c0"
+  const curMoney = snap?.money ?? 0;
+  const upgrades = snap?.upgrades || {};
+  const cardW = (mw - 50) / 3;
+  const cardH = 220;
+
+  catalog.forEach((item, idx) => {
+    const cx = mx + 16 + idx * (cardW + 9);
+    const cy = my + 80;
+    const curLvl = upgrades[item.key] || 0;
+    const nextLvl = curLvl < item.levels.length ? item.levels[curLvl] : null;
+
+    roundRect(ctx, cx, cy, cardW, cardH, 8);
+    ctx.fillStyle = highContrast ? "#111111" : "rgba(255, 255, 255, 0.04)";
+    ctx.fill();
+    ctx.strokeStyle = highContrast ? "#ffffff" : "rgba(255, 255, 255, 0.15)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    text(`${item.icon} ${item.name}`, cx + cardW / 2, cy + 28, {
+      size: 13, weight: "bold", align: "center", color: highContrast ? "#ffff00" : "#ffffff"
+    });
+    text(`Cấp hiện tại: ${curLvl}/${item.levels.length}`, cx + cardW / 2, cy + 50, {
+      size: 11, align: "center", color: "#9fb3c0"
+    });
+
+    if (nextLvl) {
+      text(`Cấp ${nextLvl.level}: ${nextLvl.desc}`, cx + cardW / 2, cy + 85, {
+        size: 11, align: "center", color: "#e0e0e0"
+      });
+      text(`Giá: ${nextLvl.price}k`, cx + cardW / 2, cy + 115, {
+        size: 14, weight: "bold", align: "center", color: curMoney >= nextLvl.price ? "#ffd54f" : "#ff8a80"
+      });
+
+      const btnW = cardW - 24, btnH = 34;
+      const bx = cx + 12, by = cy + cardH - 50;
+      const canAfford = curMoney >= nextLvl.price;
+
+      roundRect(ctx, bx, by, btnW, btnH, 6);
+      ctx.fillStyle = canAfford ? (highContrast ? "#00ff66" : "#2e7d32") : "rgba(255, 255, 255, 0.05)";
+      ctx.fill();
+      ctx.strokeStyle = canAfford ? (highContrast ? "#ffffff" : "#66bb6a") : "rgba(255, 255, 255, 0.2)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      const btnLabel = canAfford ? `MUA [Phím ${item.keyNum}]` : "CHƯA ĐỦ TIỀN";
+      text(btnLabel, bx + btnW / 2, by + btnH / 2, {
+        size: 12, weight: "bold", align: "center", base: "middle",
+        color: canAfford ? (highContrast ? "#000000" : "#ffffff") : "#78909c"
+      });
+
+      if (canAfford) {
+        shopBtnRects.push({ key: item.key, x: bx, y: by, w: btnW, h: btnH });
+      }
+    } else {
+      text("✨ ĐÃ NÂNG CẤP TỐI ĐA", cx + cardW / 2, cy + 110, {
+        size: 12, weight: "bold", align: "center", color: highContrast ? "#00ff66" : "#81c784"
+      });
+    }
+  });
+
+  // Hàng tồn chuyển kho
+  let stockText = "Không còn hàng tồn dư";
+  if (snap?.stock) {
+    const stockItems = [];
+    for (const [k, v] of Object.entries(snap.stock)) {
+      if (v > 0) stockItems.push(`${KIND_NAME[k] || k} ×${v}`);
+    }
+    if (stockItems.length > 0) stockText = stockItems.join(" · ");
+  }
+  text(`📦 Hàng tồn chuyển kho: ${stockText}`, mx + 20, my + mh - 66, {
+    size: 12, color: "#cfd8dc"
+  });
+
+  // Nút đóng Shop sớm
+  const dw = 280, dh = 40;
+  const dx = (w - dw) / 2, dy = my + mh - 48;
+  shopDoneBtnRect = { x: dx, y: dy, w: dw, h: dh };
+
+  roundRect(ctx, dx, dy, dw, dh, 8);
+  ctx.fillStyle = highContrast ? "#ffffff" : "#0288d1";
+  ctx.fill();
+  ctx.strokeStyle = highContrast ? "#ffffff" : "#29b6f6";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  text("🚪 XONG & SANG NGÀY TIẾP (E / Space)", dx + dw / 2, dy + dh / 2, {
+    size: 13, weight: "bold", align: "center", base: "middle",
+    color: highContrast ? "#000000" : "#ffffff"
+  });
+
+  // HUD Dưới hướng dẫn
+  ctx.fillStyle = highContrast ? "#000000" : "rgba(12, 20, 28, 0.9)";
+  ctx.fillRect(0, h - 36, w, 36);
+  text("Phím 1: Mua Oxy · Phím 2: Mua Máu · Phím 3: Mua Vợt · E / Space: Sang ngày mới · P: Tạm dừng", w / 2, h - 14, {
+    size: 12, align: "center", color: "#9fb3c0"
   });
 }
 
-// ----- MÀN HÌNH KẾT THÚC & TOASTS -----
+// ----- MÀN HÌNH KẾT THÚC & TOASTS & PAUSE -----
 function overlay(w, h) {
   drawDangerVignette(w, h);
   updateAndDrawFloatingTexts();
   drawToasts(w, h);
 
-  if (offline) {
-    text("⚠️ Mất kết nối tới máy chủ (hãy kiểm tra tiến trình server)", w / 2, 80, {
-      align: "center", color: "#ff5252", size: 16, weight: "bold"
-    });
-  }
-  if (snap?.error) {
-    text("❌ Luật game báo lỗi — kiểm tra terminal. Nhấn R để chơi lại.", w / 2, 105, {
-      align: "center", color: "#ff5252", size: 15, weight: "bold"
-    });
-  }
-
-  if (snap?.finished) {
+  // MÀN HÌNH PAUSE (Tạm dừng trò chơi)
+  if (snap && snap.state === "paused") {
     ctx.save();
-    ctx.fillStyle = highContrast ? "rgba(0, 0, 0, 0.92)" : "rgba(6, 12, 18, 0.85)";
+    ctx.fillStyle = highContrast ? "rgba(0, 0, 0, 0.95)" : "rgba(6, 12, 18, 0.85)";
     ctx.fillRect(0, 0, w, h);
 
-    const mw = Math.min(520, w - 40);
-    const mh = 320;
-    const mx = (w - mw) / 2, my = (h - mh) / 2;
+    const pw = 420, ph = 210;
+    const px = (w - pw) / 2, py = (h - ph) / 2;
 
-    roundRect(ctx, mx, my, mw, mh, 12);
-    ctx.fillStyle = highContrast ? "#000000" : "rgba(16, 26, 38, 0.96)";
+    roundRect(ctx, px, py, pw, ph, 12);
+    ctx.fillStyle = highContrast ? "#000000" : "rgba(16, 26, 38, 0.98)";
     ctx.fill();
-    ctx.strokeStyle = highContrast ? "#ffffff" : "rgba(255, 255, 255, 0.18)";
+    ctx.strokeStyle = highContrast ? "#ffffff" : "rgba(255, 255, 255, 0.25)";
     ctx.lineWidth = highContrast ? 3 : 1.5;
     ctx.stroke();
 
-    const modeName = snap.mode === "gather" ? "BUỔI SÁNG (GATHER)" : "BUỔI TỐI (QUÁN)";
+    text("⏸️ TẠM DỪNG (PAUSED)", w / 2, py + 52, {
+      size: 22, weight: "bold", align: "center", color: highContrast ? "#ffff00" : "#ffd54f"
+    });
+    text("Mọi đồng hồ và diễn biến trò chơi đang đứng yên", w / 2, py + 88, {
+      size: 13, align: "center", color: "#9fb3c0"
+    });
+
+    const rw = 220, rh = 42;
+    const rx = (w - rw) / 2, ry = py + 130;
+    resumeBtnRect = { x: rx, y: ry, w: rw, h: rh };
+
+    roundRect(ctx, rx, ry, rw, rh, 8);
+    ctx.fillStyle = highContrast ? "#ffffff" : "#29b6f6";
+    ctx.fill();
+    ctx.strokeStyle = highContrast ? "#ffffff" : "#81d4fa";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    text("▶️ TIẾP TỤC (Phím P / Esc)", w / 2, ry + rh / 2, {
+      size: 13, weight: "bold", align: "center", base: "middle", color: "#000000"
+    });
+
+    ctx.restore();
+    return;
+  } else {
+    resumeBtnRect = null;
+  }
+
+  // BANNER INTRO ĐẦU PHA (DayIntro & EveningIntro)
+  if (snap && snap.phase_tick !== undefined && snap.phase_tick < 180 && !snap.finished) {
+    const introAlpha = Math.min(1, Math.max(0, (180 - snap.phase_tick) / 60));
+    ctx.save();
+    ctx.globalAlpha = introAlpha;
+    const introText = snap.phase === "gather"
+      ? `☀️ BẮT ĐẦU NGÀY ${snap.day || 1} — THU HOẠCH NÔNG SẢN CÙNG ÚT SEN`
+      : snap.phase === "quan"
+      ? `🌙 BẮT ĐẦU MỞ QUÁN (NGÀY ${snap.day || 1}) — BẾP ĐÃ NỔI LỬA, ĐÓN KHÁCH!`
+      : `🏪 TIỆM TẠP HÓA ĐÊM (NGÀY ${snap.day || 1}) — NÂNG CẤP TRANG BỊ`;
+
+    const iw = 460, ih = 34;
+    const ix = (w - iw) / 2, iy = 70;
+    roundRect(ctx, ix, iy, iw, ih, 8);
+    ctx.fillStyle = highContrast ? "#000000" : "rgba(12, 28, 48, 0.95)";
+    ctx.fill();
+    ctx.strokeStyle = highContrast ? "#ffffff" : "#29b6f6";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    text(introText, w / 2, iy + ih / 2, {
+      size: 13, weight: "bold", align: "center", base: "middle",
+      color: highContrast ? "#ffff00" : "#e1f5fe", stroke: true
+    });
+    ctx.restore();
+  }
+
+      if (snap?.finished) {
+        ctx.save();
+        ctx.fillStyle = highContrast ? "rgba(0, 0, 0, 0.92)" : "rgba(6, 12, 18, 0.85)";
+        ctx.fillRect(0, 0, w, h);
+
+        const mw = Math.min(520, w - 40);
+        const mh = 320;
+        const mx = (w - mw) / 2, my = (h - mh) / 2;
+
+    const mw = Math.min(560, w - 40);
+    const mh = 330;
+    const mx = (w - mw) / 2, my = (h - mh) / 2;
+
+        const modeName = snap.mode === "gather" ? "BUỔI SÁNG (GATHER)" : "BUỔI TỐI (QUÁN)";
+        text(modeName + " KẾT THÚC", w / 2, my + 42, {
+          align: "center", size: 22, weight: "bold", color: highContrast ? "#ffff00" : "#ffd54f"
+        });
+
+    const isDayCampaign = snap.mode === "day" || snap.days_completed !== undefined;
+    const modeName = isDayCampaign
+      ? `CHIẾN DỊCH ${snap.days_completed || snap.day || 1} NGÀY`
+      : snap.mode === "gather"
+      ? "BUỔI SÁNG (GATHER)"
+      : "BUỔI TỐI (QUÁN)";
     text(modeName + " KẾT THÚC", w / 2, my + 42, {
       align: "center", size: 22, weight: "bold", color: highContrast ? "#ffff00" : "#ffd54f"
     });
 
     let reasonText = "Hoàn thành phiên chơi";
     let reasonColor = "#81d4fa";
-    if (snap.reason === "docked") {
+    if (snap.reason === "days_complete") {
+      reasonText = "🎉 HOÀN THÀNH TOÀN BỘ 5 NGÀY — Quán ăn Chợ Nổi phát triển rực rỡ!";
+      reasonColor = highContrast ? "#00ff66" : "#69f0ae";
+    } else if (snap.reason === "docked") {
       reasonText = "⚓ CẬP BẾN AN TOÀN — Toàn bộ giỏ hàng đã được chốt vào kho!";
       reasonColor = highContrast ? "#00ff66" : "#69f0ae";
     } else if (snap.reason === "time") {
@@ -1625,7 +1867,7 @@ function overlay(w, h) {
       align: "center", size: 13, weight: "bold", color: reasonColor
     });
 
-    roundRect(ctx, mx + 30, my + 105, mw - 60, 115, 8);
+    roundRect(ctx, mx + 30, my + 105, mw - 60, 120, 8);
     ctx.fillStyle = highContrast ? "#111111" : "rgba(255, 255, 255, 0.05)";
     ctx.fill();
     if (highContrast) {
@@ -1634,7 +1876,11 @@ function overlay(w, h) {
       ctx.stroke();
     }
 
-    if (snap.mode === "gather") {
+    if (isDayCampaign) {
+      text(`📅 Số ngày đã qua: ${snap.days_completed ?? snap.day ?? 1} Ngày`, mx + 50, my + 138, { size: 14, color: "#ffffff" });
+      text(`💰 Tổng tiền thu được: ${snap.earned ?? snap.money ?? 0}k`, mx + 50, my + 168, { size: 14, weight: "bold", color: highContrast ? "#ffff00" : "#ffd54f" });
+      text(`⭐ Điểm Uy tín đạt được: ${(snap.reputation ?? 0).toFixed(1)} / 5.0 · 🏆 Tổng điểm: ${snap.score ?? 0}`, mx + 50, my + 198, { size: 14, weight: "bold", color: highContrast ? "#00ff66" : "#81d4fa" });
+    } else if (snap.mode === "gather") {
       const holdCount = snap.hold ? snap.hold.length : 0;
       const holdCap = snap.hold_capacity || 12;
       text(`📦 Sản lượng thu hoạch: ${holdCount} / ${holdCap} món`, mx + 50, my + 140, { size: 14, color: "#ffffff" });
@@ -1646,47 +1892,51 @@ function overlay(w, h) {
       text(`🏆 Tổng điểm chung cuộc: ${snap.score ?? 0}`, mx + 50, my + 200, { size: 15, weight: "bold", color: highContrast ? "#00ff66" : "#69f0ae" });
     }
 
-    const bw = 220, bh = 42;
-    const bx = (w - bw) / 2, by = my + mh - 60;
-    restartBtnRect = { x: bx, y: by, w: bw, h: bh };
+        roundRect(ctx, bx, by, bw, bh, 8);
+        ctx.fillStyle = highContrast ? "#ffffff" : "#29b6f6";
+        ctx.fill();
+        ctx.strokeStyle = highContrast ? "#ffffff" : "#81d4fa";
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
-    roundRect(ctx, bx, by, bw, bh, 8);
-    ctx.fillStyle = highContrast ? "#ffffff" : "#29b6f6";
-    ctx.fill();
-    ctx.strokeStyle = highContrast ? "#ffffff" : "#81d4fa";
-    ctx.lineWidth = 2;
-    ctx.stroke();
+        text("🔄 CHƠI LẠI (Phím R)", w / 2, by + bh / 2, {
+          align: "center", base: "middle", size: 14, weight: "bold", color: "#000000"
+        });
 
-    text("🔄 CHƠI LẠI (Phím R)", w / 2, by + bh / 2, {
-      align: "center", base: "middle", size: 14, weight: "bold", color: "#000000"
-    });
+        ctx.restore();
+      } else {
+        restartBtnRect = null;
+      }
+    }
 
-    ctx.restore();
-  } else {
-    restartBtnRect = null;
-  }
-}
+    // ----- VÒNG LẶP CHÍNH -----
+    function frame() {
+      requestAnimationFrame(frame);
+      const [w, h] = fit();
 
-// ----- VÒNG LẶP CHÍNH -----
-function frame() {
-  requestAnimationFrame(frame);
-  const [w, h] = fit();
+      ctx.save();
+      if (shakeTicks > 0) {
+        const ox = (Math.random() - 0.5) * shakeMag;
+        const oy = (Math.random() - 0.5) * shakeMag;
+        ctx.translate(ox, oy);
+        shakeTicks--;
+      }
 
-  ctx.save();
-  if (shakeTicks > 0) {
-    const ox = (Math.random() - 0.5) * shakeMag;
-    const oy = (Math.random() - 0.5) * shakeMag;
-    ctx.translate(ox, oy);
-    shakeTicks--;
-  }
+      ctx.fillStyle = highContrast ? "#000000" : "#0c1218";
+      ctx.fillRect(0, 0, w, h);
 
   ctx.fillStyle = highContrast ? "#000000" : "#0c1218";
   ctx.fillRect(0, 0, w, h);
   
   if (snap) {
     updateParticles();
-    if (snap.mode === "quan") drawQuan(w, h);
-    else drawGather(w, h);
+    if (snap.phase === "shop") {
+      drawShop(w, h);
+    } else if (snap.phase === "quan" || snap.mode === "quan") {
+      drawQuan(w, h);
+    } else {
+      drawGather(w, h);
+    }
     eventLog(w, h);
     overlay(w, h);
   } else {
@@ -1699,4 +1949,5 @@ function frame() {
 requestAnimationFrame(frame);
 </script>
 </body>
+
 </html>
