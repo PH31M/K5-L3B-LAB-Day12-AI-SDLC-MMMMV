@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - Phase 4 (Phát hành v1.0.0 — Contract v1.3)
+### Added
+- **Contract v1.3:** Khai báo chính thức `bench_cmd` và `soak_cmd` trong `game.contract.json`.
+- **Soak Testing 10 Ngày (`tools/soak.py`):** Lệnh kiểm thử sức bền 10 ngày headless liên tục với bot tất định, bảo toàn tiền, uy tín, nâng cấp xuyên suốt 3 pha `gather -> quan -> shop`, xuất `docs/proof/phase-4/soak.json` trong 0.77s với 0 crash.
+- **Benchmark FPS Browser (`tools/bench.py`):** Đo đạc hiệu năng render 60 FPS trên trình duyệt Chromium/Playwright thật tại độ phân giải chuẩn 1280×720, xuất `docs/proof/phase-4/bench.json`.
+- **Cảnh báo nguy hiểm & Chế độ tương phản cao (High Contrast):**
+  - 3 cảnh báo trực quan bằng biểu tượng + chữ: 🐊 Thủy quái gần, 🫁 Hết hơi, 😡 Khách sắp giận.
+  - Phím `C` và nút `👁️ Tương phản` bật giao diện tương phản cao hỗ trợ người dùng khiếm thị màu.
+  - Cờ `?hc=1` trên URL khởi động trực tiếp chế độ tương phản.
+
 ## [1.2.0] - Phase 3 (Mùa Nước Nổi)
 ### Added
 - **Kho cá thể (Individual Items):** Chuyển đổi định dạng kho sang mảng cá thể `{id, kind, fresh}`.
