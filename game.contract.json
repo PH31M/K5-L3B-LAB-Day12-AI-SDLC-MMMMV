@@ -5,6 +5,8 @@
   "build_cmd": "true",
   "run_cmd": "python3 -m chonoi.live --mode gather",
   "headless_cmd": "python3 -m chonoi.headless",
+  "bench_cmd": "python3 tools/bench.py",
+  "soak_cmd": "python3 tools/soak.py",
   "extensions": [
     "net"
   ],
