@@ -1,0 +1,141 @@
+{
+ "gather": {
+  "shots": [
+   "gather-surface.png",
+   "gather-dive.png"
+  ],
+  "moved": {
+   "from": [
+    2,
+    0
+   ],
+   "to": [
+    6.9777777777777725,
+    7.066666666666662
+   ]
+  },
+  "scene": "gather",
+  "fps": 56.59302362168876,
+  "errors": []
+ },
+ "warn": {
+  "shots": [
+   "gather-warnings.png",
+   "gather-warnings-hc.png"
+  ],
+  "monsters": [
+   {
+    "id": "M1",
+    "kind": "ca_sau",
+    "pos": [
+     57,
+     22
+    ],
+    "state": "chase",
+    "state_ticks_left": 0
+   }
+  ],
+  "oxy": 181,
+  "fps": 59.232661561549385,
+  "errors": []
+ },
+ "fx0": {
+  "shots": [
+   "gather-fx0.png"
+  ],
+  "fps": 59.12569691652892,
+  "errors": []
+ },
+ "quan": {
+  "shots": [
+   "quan-fixture.png",
+   "quan-carry.png",
+   "quan-pause.png",
+   "quan-hc.png"
+  ],
+  "hand_after_E_at_B2": {
+   "order_id": "C3",
+   "dish_id": "lau_ca_linh_dien_dien",
+   "base_price": 120
+  },
+  "W_increases_z": true,
+  "pos_near_T3": [
+   8.627777777777766,
+   6.677777777777778
+  ],
+  "served_events": [
+   "dish_picked",
+   "served"
+  ],
+  "paused": "paused",
+  "resumed": "playing",
+  "fps": 54.88096727982494,
+  "errors": []
+ },
+ "day": {
+  "shots": [
+   "day-1-gather-intro.png",
+   "day-2-quan.png",
+   "day-3-quan-customer.png",
+   "day-4-shop.png",
+   "day-5-shop-bought.png",
+   "day-6-shop-fail.png",
+   "day-7-summary.png"
+  ],
+  "after_E": {
+   "mode": "day",
+   "phase": "quan",
+   "bounds": {
+    "x": [
+     0,
+     16
+    ],
+    "z": [
+     0,
+     10
+    ]
+   }
+  },
+  "client_scene": "quan",
+  "W_increases_z_in_day_quan": true,
+  "shop_meta_max_ticks": 600,
+  "after_buy": {
+   "money": 250,
+   "upgrades": {
+    "oxygen": 1
+   },
+   "active": {}
+  },
+  "after_buy_fail": [
+   {
+    "upgrade": "oxygen",
+    "level": 1,
+    "price": 200,
+    "money": 250
+   },
+   {
+    "upgrade": "net",
+    "level": 1,
+    "price": 250,
+    "money": 0
+   }
+  ],
+  "end": {
+   "reason": "days_complete",
+   "money": 0,
+   "upgrades": {
+    "oxygen": 1,
+    "net": 1
+   }
+  },
+  "fps": 59.79545179022928,
+  "errors": []
+ },
+ "quanplain": {
+  "shots": [
+   "quan-plain.png"
+  ],
+  "fps": 51.138069706965894,
+  "errors": []
+ }
+}
