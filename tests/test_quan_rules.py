@@ -36,7 +36,7 @@ class Base(unittest.TestCase):
         return {r["tick"]: r for r in snapshots(rows)}
 
 
-@unittest.skip("chờ ticket 01: scenario.py chưa nhận customers[]/hand đầy đủ")
+@unittest.skip("chờ ticket 02–05: luật quán chưa có (fixture đã nạp được)")
 class Customers(Base):
     def test_khach_den_tick_120_va_giu_cho(self):
         """Không scenario: khách đầu đến ở tick 120, ngồi bàn trống id nhỏ nhất, giữ đúng công thức."""
@@ -66,7 +66,7 @@ class Customers(Base):
             self.assertEqual(self.snaps(rows)[70]["customers"], [])
 
 
-@unittest.skip("chờ ticket 01: scenario.py chưa nhận stoves[].state/ready_ticks + hand")
+@unittest.skip("chờ ticket 04–05: luật bếp/phục vụ chưa có (fixture đã nạp được)")
 class Service(Base):
     def test_nau_dung_don_va_chin_sau_cook_s(self):
         """Đứng cạnh bếp, có đơn reserved: interact → cook_started (tiêu đúng nguyên liệu), 6 s sau dish_ready."""
