@@ -99,10 +99,10 @@ class DaySim:
     def _start_quan(self):
         inventory = self.inner.inventory_items()
         menu = {dish: self.tuning["menu"][dish] for dish in self.plan["dishes"]}
-        tuning = dict(self.tuning, menu=menu)
         scenario = deepcopy(self.scenario.get("quan", {}))
-        validate_day_quan(scenario, tuning, inventory)
-        self.inner = QuanSim(tuning, scenario, self.streams, self.ids, inventory=inventory)
+        validate_day_quan(scenario, dict(self.tuning, menu=menu), inventory)
+        self.inner = QuanSim(self.tuning, scenario, self.streams, self.ids,
+                             inventory=inventory, day_plan=self.plan)
         self.inner.money = self.money
         self.inner.earned = self.earned
         self.inner.reputation = self.reputation

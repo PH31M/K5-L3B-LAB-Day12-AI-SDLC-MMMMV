@@ -8,6 +8,7 @@ mới tiêu nguyên liệu (việc của lát 4).
 import math
 
 from ..ids import id_key
+from .quan_service import cancel_customer_order
 
 TICK = 60
 
@@ -25,10 +26,18 @@ def _reserved_totals(sim):
 
 
 def affordable_dishes(sim):
-    """Món mà kho khả dụng (tồn trừ phần đang giữ) đủ nguyên liệu, sắp theo id."""
+    """Món mà kho khả dụng (tồn trừ phần đang giữ) đủ nguyên liệu, sắp theo id.
+    Trong `day`: lọc menu theo `day_plan.dishes` trước, rồi mới lọc nguyên liệu khả dụng.
+    Quán độc lập dùng cả 6 món."""
     held = _reserved_totals(sim)
     out = []
-    for dish_id in sorted(sim.menu):
+    if getattr(sim, "day_plan", None) and isinstance(sim.day_plan, dict) and "dishes" in sim.day_plan:
+        candidate_dishes = sorted(sim.day_plan["dishes"])
+    else:
+        candidate_dishes = sorted(sim.menu)
+    for dish_id in candidate_dishes:
+        if dish_id not in sim.menu:
+            continue
         recipe = sim.menu[dish_id]["recipe"]
         if all(sim.stock.get(k, 0) - held.get(k, 0) >= n for k, n in recipe.items()):
             out.append(dish_id)
@@ -49,6 +58,7 @@ def tick_patience(sim, events):
 
 def _leave(sim, c, reason, events):
     sim.customers.remove(c)
+    cancel_customer_order(sim, c["id"])
     if reason == "patience":
         sim.reputation = _clamp(sim.reputation + sim.t["left_reputation_delta"], sim.t)
     events.append(("customer_left", {"order_id": c["id"], "table_id": c["table_id"],

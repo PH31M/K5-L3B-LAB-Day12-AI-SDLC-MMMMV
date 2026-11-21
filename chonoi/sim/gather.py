@@ -19,6 +19,7 @@ import math
 
 from ..ids import sort_by_id
 from ..inventory import hold_to_items
+from . import monsters
 from .gather_actions import handle_catch_fish, handle_gather_node
 from .ramp import ramp_velocity
 
@@ -53,6 +54,7 @@ class GatherSim:
         self.time_left_ticks = scenario.get("time_left_ticks", int(round(t["duration_s"] * TICK)))
         # nút và đàn cá: scenario THAY THẾ danh sách mặc định; random_fish=false tắt cá mặc định
         src_nodes = scenario["nodes"] if "nodes" in scenario else t["nodes"]
+        self.monsters = monsters.build(tuning, scenario, day)
         self.nodes = [{"id": n["id"], "kind": n["kind"], "pos": [float(c) for c in n["pos"]],
                        "regrow_ticks": n.get("regrow_ticks", 0)} for n in src_nodes]
         if "fish" in scenario:
@@ -91,6 +93,8 @@ class GatherSim:
                       for n in sort_by_id(self.nodes)],
             "fish": [{"id": f["id"], "pos": f["pos"], "kind": f["kind"], "heading_deg": f["heading_deg"]}
                      for f in sort_by_id(self.fish)],
+            "monsters": [{"id": m["id"], "kind": m["kind"], "pos": m["pos"], "state": m["state"],
+                          "state_ticks_left": m["state_ticks_left"]} for m in sort_by_id(self.monsters)],
         }
 
     # --- một bước ---------------------------------------------------------------
@@ -117,6 +121,10 @@ class GatherSim:
             self.hold.clear()
             events.append(("faint", {"cause": "choke", "lost": lost, "hp": 0}))
             self._finish("fainted", events)
+            return events
+        # 2b. thủy quái: di chuyển rồi xét tối đa một hit (PRD §1.2)
+        monsters.step(self, events)
+        if self.done:
             return events
         # 3. interact: bến trước, rồi hái
         if inp.pressed("interact"):

@@ -18,12 +18,13 @@ class QuanSim:
     mode = "quan"
     phase = "quan"
 
-    def __init__(self, tuning, scenario, streams, ids, inventory=None):
+    def __init__(self, tuning, scenario, streams, ids, inventory=None, day_plan=None):
         t = tuning["quan"]
         self.t = t
         self.menu = tuning["menu"]
         self.rng = streams
         self.ids = ids
+        self.day_plan = day_plan if day_plan is not None else scenario.get("day_plan")
         self.random_customers = scenario.get("random_customers", True)
         p = scenario.get("player", {})
         self.pos = list(p.get("pos", t["start_pos"]))
