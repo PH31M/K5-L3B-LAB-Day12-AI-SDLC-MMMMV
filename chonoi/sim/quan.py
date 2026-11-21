@@ -24,7 +24,7 @@ class QuanSim:
         self.menu = tuning["menu"]
         self.rng = streams
         self.ids = ids
-        self.day_plan = day_plan or scenario.get("day_plan")
+        self.day_plan = day_plan if day_plan is not None else scenario.get("day_plan")
         self.random_customers = scenario.get("random_customers", True)
         p = scenario.get("player", {})
         self.pos = list(p.get("pos", t["start_pos"]))
@@ -115,9 +115,8 @@ class QuanSim:
             if not any(name == "quan_end" for name, _ in events):
                 events.append(("quan_end", {"reason": "time", "money": self.money, "earned": self.earned,
                                             "shift_earned": self.shift_earned, "reputation": self.reputation}))
-        else:
-            if self.random_customers:
-                quan_customers.spawn_due(self, events)
+        elif self.random_customers:
+            quan_customers.spawn_due(self, events)
         return events
 
     def _move(self, inp):
