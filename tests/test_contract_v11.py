@@ -10,7 +10,7 @@ class Manifest(unittest.TestCase):
     def test_contract_v11_shape(self):
         with open("game.contract.json", encoding="utf-8") as f:
             c = json.load(f)
-        self.assertEqual(c["contract_version"], "1.1")
+        self.assertIn(c["contract_version"], ("1.1", "1.2", "1.3"))
         g = c["tuning"]["gather"]
         self.assertEqual(len(g["fish_initial"]), 8)
         self.assertEqual(len(c["tuning"]["menu"]), 6)

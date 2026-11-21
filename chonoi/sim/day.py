@@ -22,6 +22,15 @@ class DaySim:
         self.days = days
         self.days_completed = 0
         self.plans = {str(plan["day"]): plan for plan in tuning["day_plan"]}
+        n_plans = len(tuning.get("day_plan", []))
+        if n_plans > 0:
+            for n in range(self.day, self.day + days):
+                if str(n) not in self.plans:
+                    cycle_day = ((n - 1) % n_plans) + 1
+                    if str(cycle_day) in self.plans:
+                        p = deepcopy(self.plans[str(cycle_day)])
+                        p["day"] = n
+                        self.plans[str(n)] = p
         if any(str(n) not in self.plans for n in range(self.day, self.day + days)):
             raise BadInput("lượt day vượt số ngày có trong day_plan")
         self.plans.update(prefs.get("day_plan", {}))
